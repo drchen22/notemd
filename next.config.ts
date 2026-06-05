@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+    allowedDevOrigins: ["83.229.124.231"],
+    experimental: {
+        optimizePackageImports: ["lucide-react"],
+    },
 };
 
 export default nextConfig;
