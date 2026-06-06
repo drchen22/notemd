@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FilePenLine } from 'lucide-react'
+import { FilePenLine, PanelLeftClose, PanelLeftOpen, MessageSquare } from 'lucide-react'
 
 import type { FileTreeNode } from '@/types/file-tree'
 
@@ -12,9 +12,25 @@ interface FileTreeProps {
   onFileSelect: (path: string) => void
   /** Increment to trigger a re-fetch of the file tree */
   refreshKey?: number
+  /** Whether the sidebar is in collapsed (icon-only) mode */
+  collapsed?: boolean
+  /** Toggle collapsed state */
+  onToggleCollapse?: () => void
+  /** Current width of the sidebar (for passing to items) */
+  width?: number
+  /** Open the full-page AI chat */
+  onOpenFullChat?: () => void
 }
 
-export function FileTree({ activeFilePath, onFileSelect, refreshKey }: FileTreeProps) {
+export function FileTree({
+  activeFilePath,
+  onFileSelect,
+  refreshKey,
+  collapsed = false,
+  onToggleCollapse,
+  width,
+  onOpenFullChat,
+}: FileTreeProps) {
   const [tree, setTree] = useState<FileTreeNode[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -34,23 +50,45 @@ export function FileTree({ activeFilePath, onFileSelect, refreshKey }: FileTreeP
       }
     }
     loadTree()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [refreshKey])
 
+  // Collapsed mode: show only an icon strip
+  if (collapsed) {
+    return (
+      <aside className="flex h-full w-full flex-col items-center border-r border-sidebar-border bg-sidebar py-3">
+        <button
+          onClick={onToggleCollapse}
+          className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          title="Expand sidebar"
+        >
+          <PanelLeftOpen className="size-4" />
+        </button>
+      </aside>
+    )
+  }
+
   return (
-    <aside className="relative flex h-full w-60 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar">
+    <aside className="relative flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <div className="flex items-center gap-2.5">
           <div className="flex size-7 items-center justify-center rounded-md bg-sidebar-primary/12">
             <FilePenLine className="size-3.5 text-sidebar-primary" strokeWidth={2.2} />
           </div>
-          <div>
-            <h1 className="text-sm font-semibold tracking-wide text-sidebar-foreground">
-              NoteMD
-            </h1>
-          </div>
+          <h1 className="text-sm font-semibold tracking-wide text-sidebar-foreground">
+            NoteMD
+          </h1>
         </div>
+        <button
+          onClick={onToggleCollapse}
+          className="flex size-7 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          title="Collapse sidebar"
+        >
+          <PanelLeftClose className="size-4" />
+        </button>
       </div>
 
       {/* Section label */}
@@ -68,7 +106,7 @@ export function FileTree({ activeFilePath, onFileSelect, refreshKey }: FileTreeP
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-4 animate-pulse rounded bg-sidebar-accent"
+                  className="h-5 animate-pulse rounded bg-sidebar-accent"
                   style={{ width: `${60 + i * 12}%` }}
                 />
               ))}
@@ -90,6 +128,19 @@ export function FileTree({ activeFilePath, onFileSelect, refreshKey }: FileTreeP
             />
           ))}
       </div>
+
+      {/* New Chat button */}
+      {onOpenFullChat && (
+        <div className="border-t border-sidebar-border px-3 py-2">
+          <button
+            onClick={onOpenFullChat}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
+            <MessageSquare className="size-4 shrink-0" />
+            <span>新对话</span>
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

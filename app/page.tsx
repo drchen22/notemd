@@ -1,24 +1,44 @@
 'use client'
 
-import { startTransition, useState } from 'react'
+import { startTransition, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { Sparkles } from 'lucide-react'
 
 import { FileTree } from '@/components/sidebar/file-tree'
 import { AIPanel } from '@/components/ai/ai-panel'
+import { FullPageChat } from '@/components/ai/fullpage-chat'
+import { ResizeHandle } from '@/components/ui/resize-handle'
 
 const NoteEditor = dynamic(
   () => import('@/components/editor/editor').then((mod) => mod.NoteEditor),
-  { ssr: false, loading: () => <div className="flex-1 bg-background" /> }
+  { ssr: false, loading: () => <div className="flex-1 bg-background" /> },
 )
+
+const SIDEBAR_MIN = 180
+const SIDEBAR_MAX = 420
+const AI_MIN = 280
+const AI_MAX = 560
 
 export default function Home() {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
   const [markdownContent, setMarkdownContent] = useState<string | null>(null)
   const [showAI, setShowAI] = useState(false)
   const [treeRefreshKey, setTreeRefreshKey] = useState(0)
+  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [aiWidth, setAiWidth] = useState(360)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [showFullChat, setShowFullChat] = useState(false)
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w + delta)))
+  }, [])
+
+  const handleAiResize = useCallback((delta: number) => {
+    setAiWidth((w) => Math.min(AI_MAX, Math.max(AI_MIN, w + delta)))
+  }, [])
 
   async function handleFileSelect(filePath: string) {
+    // Switch back to editor if full-page chat is open
+    setShowFullChat(false)
     startTransition(() => {
       setActiveFilePath(filePath)
     })
@@ -57,23 +77,50 @@ export default function Home() {
 
   return (
     <main className="flex h-screen overflow-hidden bg-background">
-      <FileTree activeFilePath={activeFilePath} onFileSelect={handleFileSelect} refreshKey={treeRefreshKey} />
-
-      <div className="min-w-0 flex-1 flex flex-col">
-        <NoteEditor
-          markdownContent={markdownContent}
+      {/* File Tree Sidebar */}
+      <div
+        className="relative shrink-0"
+        style={{ width: sidebarCollapsed ? 48 : sidebarWidth }}
+      >
+        <FileTree
           activeFilePath={activeFilePath}
-          onToggleAI={() => setShowAI((v) => !v)}
-          showAI={showAI}
+          onFileSelect={handleFileSelect}
+          refreshKey={treeRefreshKey}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          width={sidebarCollapsed ? 48 : sidebarWidth}
+          onOpenFullChat={() => setShowFullChat(true)}
         />
+        {!sidebarCollapsed && (
+          <ResizeHandle side="left" onResize={handleSidebarResize} />
+        )}
       </div>
 
+      {/* Center: Editor or Full-Page Chat */}
+      <div className="min-w-0 flex-1 flex flex-col">
+        {showFullChat ? (
+          <FullPageChat onClose={() => setShowFullChat(false)} />
+        ) : (
+          <NoteEditor
+            markdownContent={markdownContent}
+            activeFilePath={activeFilePath}
+            onToggleAI={() => setShowAI((v) => !v)}
+            showAI={showAI}
+          />
+        )}
+      </div>
+
+      {/* Right: AI Panel */}
       {showAI && (
-        <AIPanel
-          currentFilePath={activeFilePath}
-          currentFileContent={markdownContent}
-          onFileChanged={handleFileChanged}
-        />
+        <div className="relative shrink-0" style={{ width: aiWidth }}>
+          <ResizeHandle side="right" onResize={handleAiResize} />
+          <AIPanel
+            currentFilePath={activeFilePath}
+            currentFileContent={markdownContent}
+            onFileChanged={handleFileChanged}
+            width={aiWidth}
+          />
+        </div>
       )}
     </main>
   )

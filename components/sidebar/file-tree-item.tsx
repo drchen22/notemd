@@ -23,26 +23,26 @@ export function FileTreeItem({ node, activeFilePath, onFileSelect, depth }: File
       <div>
         <button
           onClick={() => setIsOpen((prev) => !prev)}
-          className="group flex w-full items-center gap-1 rounded-md px-2 py-[5px] text-[0.8125rem] text-sidebar-foreground/75 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          style={{ paddingLeft: `${depth * 14 + 8}px` }}
+          className="group flex w-full items-center gap-1.5 rounded-md px-2 py-[7px] text-[0.8125rem] text-sidebar-foreground/75 transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
           <ChevronRight
             className={cn(
-              'size-3 shrink-0 text-sidebar-foreground/30 transition-transform duration-200',
-              isOpen && 'rotate-90'
+              'size-3.5 shrink-0 text-sidebar-foreground/30 transition-transform duration-200',
+              isOpen && 'rotate-90',
             )}
           />
           {isOpen ? (
-            <FolderOpen className="size-3.5 shrink-0 text-sidebar-primary/70" />
+            <FolderOpen className="size-4 shrink-0 text-sidebar-primary/70" />
           ) : (
-            <Folder className="size-3.5 shrink-0 text-sidebar-foreground/40" />
+            <Folder className="size-4 shrink-0 text-sidebar-foreground/40" />
           )}
           <span className="truncate">{node.name}</span>
         </button>
         <div
           className={cn(
             'grid transition-[grid-template-rows] duration-200 ease-in-out',
-            isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
           )}
         >
           <div className="overflow-hidden">
@@ -65,19 +65,19 @@ export function FileTreeItem({ node, activeFilePath, onFileSelect, depth }: File
     <button
       onClick={() => onFileSelect(node.path)}
       className={cn(
-        'group flex w-full items-center gap-1.5 rounded-md px-2 py-[5px] text-[0.8125rem] transition-all duration-150',
+        'group flex w-full items-center gap-2 rounded-md px-2 py-[7px] text-[0.8125rem] transition-all duration-150',
         isActive
           ? 'bg-sidebar-primary/12 text-sidebar-primary font-medium'
-          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
       )}
-      style={{ paddingLeft: `${depth * 14 + 20}px` }}
+      style={{ paddingLeft: `${depth * 16 + 20}px` }}
     >
       <FileText
         className={cn(
-          'size-3.5 shrink-0 transition-colors',
+          'size-4 shrink-0 transition-colors',
           isActive
             ? 'text-sidebar-primary'
-            : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/50'
+            : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/50',
         )}
       />
       <span className="truncate">{node.name}</span>

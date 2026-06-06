@@ -4,13 +4,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 
 import { editorExtensions } from '@/lib/editor-extensions'
+import { createInlineAITrigger } from '@/lib/extensions/inline-ai-trigger'
 import { resolveImagePaths, relativizeImagePaths } from '@/lib/image-paths'
 
 import { CodeBlockLangMenu } from './code-block-lang-menu'
 import { TableMenu } from './table-menu'
 import { Toolbar } from './toolbar'
+import { SelectionAIMenu } from './selection-ai-menu'
+import { InlineAIInput } from './inline-ai-input'
 
 type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved'
+
+interface InlineAIState {
+  isOpen: boolean
+  cursorPos: number
+  coords: { top: number; left: number }
+}
 
 interface NoteEditorProps {
   markdownContent?: string | null
@@ -28,6 +37,44 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
   const isExternalUpdateRef = useRef(false)
   const lastSavedMarkdownRef = useRef<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null)
+
+  // Inline AI state
+  const [inlineAI, setInlineAI] = useState<InlineAIState>({
+    isOpen: false,
+    cursorPos: 0,
+    coords: { top: 0, left: 0 },
+  })
+
+  const openInlineAI = useCallback((slashPos: number) => {
+    // Called synchronously from ProseMirror's handleTextInput.
+    // NO editor transactions — just calculate position and set state.
+    const editor = editorRef.current
+    const scrollEl = scrollContainerRef.current
+    if (!editor || !scrollEl) return
+
+    try {
+      // Calculate floating position from the slash position
+      // coordsAtPos uses the CURRENT document state (slash is still there)
+      const viewCoords = editor.view.coordsAtPos(slashPos)
+      const containerRect = scrollEl.getBoundingClientRect()
+      const left = Math.max(8, Math.min(
+        viewCoords.left - containerRect.left,
+        containerRect.width - 440,
+      ))
+      // Position below the line with the slash
+      const top = viewCoords.bottom - containerRect.top + scrollEl.scrollTop + 8
+
+      setInlineAI({ isOpen: true, cursorPos: slashPos, coords: { top, left } })
+    } catch {
+      setInlineAI({ isOpen: true, cursorPos: slashPos, coords: { top: 0, left: 0 } })
+    }
+  }, [])
+
+  const closeInlineAI = useCallback(() => {
+    setInlineAI((prev) => ({ ...prev, isOpen: false }))
+  }, [])
 
   const uploadImage = useCallback(
     async (file: File): Promise<string | null> => {
@@ -83,7 +130,7 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
   )
 
   const editor = useEditor({
-    extensions: editorExtensions,
+    extensions: [...editorExtensions, createInlineAITrigger(openInlineAI)],
     content: DEFAULT_CONTENT,
     immediatelyRender: false,
     editorProps: {
@@ -156,6 +203,9 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
     },
   })
 
+  // Keep editorRef in sync
+  editorRef.current = editor
+
   // Load external markdown content
   useEffect(() => {
     if (!editor || !markdownContent || markdownContent === lastLoadedRef.current) return
@@ -182,11 +232,20 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
   return (
     <div className="flex h-full flex-col bg-background">
       <Toolbar editor={editor} saveStatus={saveStatus} onToggleAI={onToggleAI} showAI={showAI} />
-      <div className="relative flex-1 overflow-y-auto paper-texture custom-scrollbar">
-        <div className="mx-auto max-w-[42rem] px-8 py-10">
+      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto paper-texture custom-scrollbar">
+        <div className="mx-auto max-w-[42rem] px-8 pt-10 pb-[50vh]">
           <EditorContent editor={editor} />
         </div>
         <CodeBlockLangMenu editor={editor} />
+        <SelectionAIMenu editor={editor} activeFilePath={activeFilePath ?? null} />
+        <InlineAIInput
+          editor={editor}
+          activeFilePath={activeFilePath ?? null}
+          isOpen={inlineAI.isOpen}
+          cursorPos={inlineAI.cursorPos}
+          coords={inlineAI.coords}
+          onClose={closeInlineAI}
+        />
       </div>
       <TableMenu editor={editor} />
     </div>
