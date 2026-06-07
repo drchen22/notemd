@@ -3,12 +3,10 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 
 import { withReasoning } from '@/lib/ai/with-reasoning'
-import {
-  listFilesTool,
-  readFileTool,
-  writeFileTool,
-  editFileTool,
-} from '@/lib/tools'
+import { listFilesTool } from '@/lib/tools/list-files'
+import { readFileTool } from '@/lib/tools/read-file'
+import { writeFileTool } from '@/lib/tools/write-file'
+import { editFileTool } from '@/lib/tools/edit-file'
 
 /**
  * Custom fetch that injects `chat_template_kwargs: { enable_thinking: true }`
@@ -51,6 +49,8 @@ You can help users with:
 - Generating new content or outlines
 
 You have access to the user's current file (provided as context). Use the tools to read other files or write changes when needed.
+
+Files may have YAML frontmatter with metadata (title, date, tags, category). The readFile tool returns frontmatter as a separate object alongside the body content. When writing files, provide only the body content — frontmatter is preserved automatically. When creating new files, frontmatter is auto-generated.
 
 When writing files, always preserve the existing markdown formatting unless the user asks to change it.
 Be concise and helpful. Respond in the same language the user writes in.`

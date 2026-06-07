@@ -1,17 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 
 import { editorExtensions } from '@/lib/editor-extensions'
 import { createInlineAITrigger } from '@/lib/extensions/inline-ai-trigger'
 import { resolveImagePaths, relativizeImagePaths } from '@/lib/image-paths'
 
+import type { NoteFrontmatter } from '@/types/frontmatter'
+
+import { BlockHandle } from './block-handle'
 import { CodeBlockLangMenu } from './code-block-lang-menu'
 import { TableMenu } from './table-menu'
 import { Toolbar } from './toolbar'
 import { SelectionAIMenu } from './selection-ai-menu'
 import { InlineAIInput } from './inline-ai-input'
+import { FrontmatterMeta } from './frontmatter-meta'
 
 type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved'
 
@@ -24,14 +28,17 @@ interface InlineAIState {
 interface NoteEditorProps {
   markdownContent?: string | null
   activeFilePath?: string | null
+  frontmatter?: NoteFrontmatter | null
+  onFrontmatterChange?: (fm: NoteFrontmatter) => void
   onToggleAI?: () => void
   showAI?: boolean
 }
 
 const DEBOUNCE_MS = 1500
 const DEFAULT_CONTENT = '<h1>Welcome to NoteMD</h1><p>Start writing, or open a file from the sidebar…</p>'
+const DEFAULT_INLINE_AI_STATE: InlineAIState = { isOpen: false, cursorPos: 0, coords: { top: 0, left: 0 } }
 
-export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI }: NoteEditorProps) {
+export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFilePath, frontmatter, onFrontmatterChange, onToggleAI, showAI }: NoteEditorProps) {
   const lastLoadedRef = useRef<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isExternalUpdateRef = useRef(false)
@@ -41,11 +48,7 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
   const editorRef = useRef<ReturnType<typeof useEditor>>(null)
 
   // Inline AI state
-  const [inlineAI, setInlineAI] = useState<InlineAIState>({
-    isOpen: false,
-    cursorPos: 0,
-    coords: { top: 0, left: 0 },
-  })
+  const [inlineAI, setInlineAI] = useState<InlineAIState>(DEFAULT_INLINE_AI_STATE)
 
   const openInlineAI = useCallback((slashPos: number) => {
     // Called synchronously from ProseMirror's handleTextInput.
@@ -113,7 +116,11 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
         const res = await fetch('/api/files', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: activeFilePath, content: markdown }),
+          body: JSON.stringify({
+            path: activeFilePath,
+            content: markdown,
+            frontmatter: frontmatterRef.current ?? undefined,
+          }),
         })
         if (res.ok) {
           lastSavedMarkdownRef.current = markdown
@@ -128,6 +135,16 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
     },
     [activeFilePath]
   )
+
+  // Store function refs for use inside Tiptap callbacks (avoids stale closures)
+  const saveFileRef = useRef(saveFile)
+  saveFileRef.current = saveFile
+  const uploadImageRef = useRef(uploadImage)
+  uploadImageRef.current = uploadImage
+  const activeFilePathRef = useRef(activeFilePath)
+  activeFilePathRef.current = activeFilePath
+  const frontmatterRef = useRef(frontmatter)
+  frontmatterRef.current = frontmatter
 
   const editor = useEditor({
     extensions: [...editorExtensions, createInlineAITrigger(openInlineAI)],
@@ -146,7 +163,7 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
             event.preventDefault()
             const file = item.getAsFile()
             if (file) {
-              uploadImage(file).then((src) => {
+              uploadImageRef.current(file).then((src) => {
                 if (src) {
                   view.dispatch(
                     view.state.tr.replaceSelectionWith(
@@ -168,7 +185,7 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
         for (const file of files) {
           if (file.type.startsWith('image/')) {
             event.preventDefault()
-            uploadImage(file).then((src) => {
+            uploadImageRef.current(file).then((src) => {
               if (src) {
                 const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })
                 if (pos) {
@@ -189,8 +206,9 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
         isExternalUpdateRef.current = false
         return
       }
-      if (!activeFilePath) return
-      const currentMarkdown = relativizeImagePaths(ed.getMarkdown(), activeFilePath)
+      const fp = activeFilePathRef.current
+      if (!fp) return
+      const currentMarkdown = relativizeImagePaths(ed.getMarkdown(), fp)
       if (currentMarkdown === lastSavedMarkdownRef.current) {
         setSaveStatus('idle')
         return
@@ -198,13 +216,27 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
       setSaveStatus('unsaved')
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
-        saveFile(ed.getMarkdown())
+        saveFileRef.current(ed.getMarkdown())
       }, DEBOUNCE_MS)
     },
   })
 
   // Keep editorRef in sync
   editorRef.current = editor
+
+  // Frontmatter change handler — triggers auto-save
+  const handleFrontmatterChange = useCallback((newFm: NoteFrontmatter) => {
+    onFrontmatterChange?.(newFm)
+    // Trigger auto-save with current editor content
+    const ed = editorRef.current
+    if (ed && activeFilePath) {
+      setSaveStatus('unsaved')
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => {
+        saveFileRef.current(ed.getMarkdown())
+      }, DEBOUNCE_MS)
+    }
+  }, [activeFilePath, onFrontmatterChange])
 
   // Load external markdown content
   useEffect(() => {
@@ -232,11 +264,18 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
   return (
     <div className="flex h-full flex-col bg-background">
       <Toolbar editor={editor} saveStatus={saveStatus} onToggleAI={onToggleAI} showAI={showAI} />
-      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto paper-texture custom-scrollbar">
-        <div className="mx-auto max-w-[42rem] px-8 pt-10 pb-[50vh]">
+      <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto custom-scrollbar">
+        <div className="mx-auto max-w-[44rem] px-10 pt-12 pb-[50vh]">
+          {frontmatter && activeFilePath && (
+            <FrontmatterMeta
+              frontmatter={frontmatter}
+              onChange={handleFrontmatterChange}
+            />
+          )}
           <EditorContent editor={editor} />
         </div>
         <CodeBlockLangMenu editor={editor} />
+        <BlockHandle editor={editor} />
         <SelectionAIMenu editor={editor} activeFilePath={activeFilePath ?? null} />
         <InlineAIInput
           editor={editor}
@@ -250,4 +289,4 @@ export function NoteEditor({ markdownContent, activeFilePath, onToggleAI, showAI
       <TableMenu editor={editor} />
     </div>
   )
-}
+})

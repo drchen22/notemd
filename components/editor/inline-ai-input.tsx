@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { Send, Square, Check, MessageSquarePlus, X } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
@@ -49,17 +49,6 @@ export function InlineAIInput({
 
   const isLoading = status === 'streaming'
 
-  // Extract ONLY the latest assistant text (for insert action)
-  const responseText = (() => {
-    const assistantMsgs = messages.filter((m) => m.role === 'assistant')
-    const last = assistantMsgs[assistantMsgs.length - 1]
-    if (!last) return ''
-    return last.parts
-      .filter((p) => p.type === 'text' && p.text?.trim())
-      .map((p) => (p as { type: 'text'; text: string }).text)
-      .join('\n')
-  })()
-
   /** Get text content for a specific message */
   function getMsgText(msg: NoteAgentUIMessage): string {
     return msg.parts
@@ -68,32 +57,28 @@ export function InlineAIInput({
       .join('')
   }
 
-  // Transition to 'result' when streaming completes
-  useEffect(() => {
-    if (phase === 'responding' && status === 'ready' && responseText) {
-      setPhase('result')
-    }
-  }, [phase, status, responseText])
+  // Extract ONLY the latest assistant text (for insert action)
+  const responseText = useMemo(() => {
+    const assistantMsgs = messages.filter((m) => m.role === 'assistant')
+    const last = assistantMsgs[assistantMsgs.length - 1]
+    if (!last) return ''
+    return last.parts
+      .filter((p) => p.type === 'text' && p.text?.trim())
+      .map((p) => (p as { type: 'text'; text: string }).text)
+      .join('\n')
+  }, [messages])
+
+  // Derive result phase during render instead of useEffect
+  const resolvedPhase = phase === 'responding' && status === 'ready' && responseText ? 'result' : phase
 
   // Focus textarea when opened
   useEffect(() => {
-    if (isOpen && phase === 'input') {
+    if (isOpen && resolvedPhase === 'input') {
       textareaRef.current?.focus()
     }
-  }, [isOpen, phase])
+  }, [isOpen, resolvedPhase])
 
   // Close on ESC
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && isOpen) {
-        e.preventDefault()
-        handleDiscard()
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
-
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     const input = textareaRef.current?.value
@@ -112,23 +97,6 @@ export function InlineAIInput({
     if (textareaRef.current) textareaRef.current.value = ''
   }
 
-  const handleInsert = useCallback(() => {
-    if (!responseText) return
-    // Replace the '/' trigger character with the AI response
-    editor.chain()
-      .focus()
-      .deleteRange({ from: cursorPos, to: cursorPos + 1 })
-      .insertContentAt(cursorPos, responseText)
-      .run()
-    handleDiscard()
-  }, [editor, cursorPos, responseText])
-
-  const handleContinue = useCallback(() => {
-    setPhase('input')
-    // Keep messages — the next sendMessage will continue the conversation
-    setTimeout(() => textareaRef.current?.focus(), 0)
-  }, [])
-
   const handleDiscard = useCallback(() => {
     // Clean up the '/' trigger character left in the editor
     try {
@@ -145,6 +113,35 @@ export function InlineAIInput({
     setMessages([])
     onClose()
   }, [editor, cursorPos, setMessages, onClose])
+
+  const handleInsert = useCallback(() => {
+    if (!responseText) return
+    // Replace the '/' trigger character with the AI response
+    editor.chain()
+      .focus()
+      .deleteRange({ from: cursorPos, to: cursorPos + 1 })
+      .insertContentAt(cursorPos, responseText)
+      .run()
+    handleDiscard()
+  }, [editor, cursorPos, responseText, handleDiscard])
+
+  const handleContinue = useCallback(() => {
+    setPhase('input')
+    // Keep messages — the next sendMessage will continue the conversation
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }, [])
+
+  // Close on ESC
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && isOpen) {
+        e.preventDefault()
+        handleDiscard()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, handleDiscard])
 
   if (!isOpen) return null
 
@@ -171,7 +168,7 @@ export function InlineAIInput({
                   <p className="max-w-[80%] rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs text-foreground">
                     {msg.parts
                       .filter((p) => p.type === 'text')
-                      .map((p, i) => (p as { type: 'text'; text: string }).text)
+                      .map((p) => (p as { type: 'text'; text: string }).text)
                       .join('')}
                   </p>
                 ) : (
@@ -192,7 +189,7 @@ export function InlineAIInput({
         )}
 
         {/* Input area */}
-        {phase === 'input' && (
+        {resolvedPhase === 'input' && (
           <form onSubmit={handleSubmit} className="p-2">
             <div className="flex items-end gap-1.5">
               <textarea
@@ -223,7 +220,7 @@ export function InlineAIInput({
         )}
 
         {/* Streaming controls */}
-        {phase === 'responding' && isLoading && (
+        {resolvedPhase === 'responding' && isLoading && (
           <div className="p-2 flex justify-center">
             <button
               onClick={() => stop()}
@@ -236,7 +233,7 @@ export function InlineAIInput({
         )}
 
         {/* Result actions */}
-        {phase === 'result' && responseText && (
+        {resolvedPhase === 'result' && responseText && (
           <div className="p-2 flex items-center gap-1.5 border-t border-border">
             <button
               onClick={handleInsert}

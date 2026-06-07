@@ -29,13 +29,13 @@ export const ToolbarButton = memo(function ToolbarButton({
       disabled={disabled}
       title={tooltip}
       className={cn(
-        'rounded-md text-muted-foreground/70 transition-all duration-150',
-        'hover:text-foreground hover:bg-secondary/80',
-        'disabled:text-muted-foreground/30',
-        isActive && 'bg-secondary text-foreground'
+        'rounded-md text-muted-foreground/50 transition-all duration-150',
+        'hover:text-foreground hover:bg-secondary/60',
+        'disabled:text-muted-foreground/20',
+        isActive && 'bg-secondary/80 text-foreground'
       )}
     >
-      <Icon strokeWidth={1.8} className="size-[15px]" />
+      <Icon strokeWidth={1.5} className="size-[15px]" />
     </Button>
   )
 })

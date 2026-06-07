@@ -30,7 +30,7 @@ export const MessageBubble = memo(function MessageBubble({ msg }: { msg: NoteAge
       <div
         className={
           isUser
-            ? 'max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground'
+            ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-sm text-background'
             : 'space-y-2'
         }
       >
@@ -50,7 +50,7 @@ export const MessageBubble = memo(function MessageBubble({ msg }: { msg: NoteAge
               )
             }
             return (
-              <div key={i} className="text-sm leading-relaxed text-foreground">
+              <div key={i} className="text-sm leading-relaxed text-foreground/80">
                 <SafeMarkdown text={part.text} />
               </div>
             )
@@ -107,7 +107,7 @@ export function formatInline(text: string): ReactNode[] {
       nodes.push(<strong key={key++}>{match[2]}</strong>)
     } else if (match[3]) {
       nodes.push(
-        <code key={key++} className="rounded bg-secondary px-1 py-0.5 text-xs font-mono text-copper">
+        <code key={key++} className="rounded bg-secondary px-1 py-0.5 text-xs font-mono text-foreground/60">
           {match[3]}
         </code>
       )
@@ -123,7 +123,7 @@ export function formatInline(text: string): ReactNode[] {
   return nodes.length > 0 ? nodes : [text]
 }
 
-export function SafeMarkdown({ text }: { text: string }) {
+export const SafeMarkdown = memo(function SafeMarkdown({ text }: { text: string }) {
   const lines = useMemo(() => {
     const split = text.split('\n')
     let start = 0
@@ -150,7 +150,7 @@ export function SafeMarkdown({ text }: { text: string }) {
       })}
     </div>
   )
-}
+})
 
 /* ── Tool Call Badge ── */
 
@@ -168,13 +168,13 @@ export function ToolCallBadge({
   const label = meta.label
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-      <Icon className="size-3 shrink-0" />
+    <div className="flex items-center gap-2 rounded-md border border-border/40 bg-secondary/40 px-2.5 py-1.5 text-xs text-muted-foreground/60">
+      <Icon className="size-3 shrink-0" strokeWidth={1.5} />
       <span>{label}</span>
       {state === 'input-streaming' || state === 'input-available' ? (
         <Loader2 className="size-3 animate-spin" />
       ) : (
-        <span className="text-[oklch(0.62_0.14_145)]">✓</span>
+        <span className="text-foreground/30">✓</span>
       )}
       {errorText && (
         <span className="text-destructive">{errorText}</span>
@@ -195,28 +195,29 @@ export function ThinkingBlock({ text, state }: { text: string; state?: string })
   }, [isStreaming])
 
   return (
-    <div className="rounded-lg border border-border bg-muted/40">
+    <div className="rounded-md border border-border/30 bg-secondary/30">
       <button
         type="button"
         onClick={toggle}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground/50 hover:text-foreground/70 transition-colors"
       >
         {isStreaming ? (
           <Loader2 className="size-3 animate-spin shrink-0" />
         ) : (
-          <Brain className="size-3 shrink-0" />
+          <Brain className="size-3 shrink-0" strokeWidth={1.5} />
         )}
-        <span className="font-medium">
+        <span>
           {isStreaming ? 'Thinking…' : 'Thought'}
         </span>
         {!isStreaming && (
           <ChevronDown
             className={`size-3 ml-auto transition-transform ${open ? 'rotate-180' : ''}`}
+            strokeWidth={1.5}
           />
         )}
       </button>
       {showBody && text && (
-        <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+        <div className="border-t border-border/30 px-3 py-2 text-xs text-muted-foreground/50 leading-relaxed whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
           {text}
         </div>
       )}

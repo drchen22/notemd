@@ -61,7 +61,7 @@ export function ResizeHandle({ side, onResize, className }: ResizeHandleProps) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       className={cn(
-        'absolute top-0 bottom-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/30 active:bg-primary/50',
+        'absolute top-0 bottom-0 z-10 w-1.5 cursor-col-resize transition-colors hover:bg-foreground/5 active:bg-foreground/10',
         side === 'left' ? 'right-0 translate-x-1/2' : 'left-0 -translate-x-1/2',
         className,
       )}

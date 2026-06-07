@@ -93,6 +93,16 @@ export function CodeBlockLangMenu({ editor }: CodeBlockLangMenuProps) {
     })
   }, [editor])
 
+  // All hooks must be called before any early return
+  const selectLanguage = useCallback((value: string) => {
+    const { $head } = editor.state.selection
+    if ($head.parent.type.name !== 'codeBlock') return
+    const pos = $head.before($head.depth)
+    editor.chain().setNodeSelection(pos).updateAttributes('codeBlock', { language: value }).run()
+    setSearch('')
+    editor.commands.focus()
+  }, [editor])
+
   useEffect(() => {
     if (!editor) return
 
@@ -104,7 +114,7 @@ export function CodeBlockLangMenu({ editor }: CodeBlockLangMenuProps) {
     editor.on('selectionUpdate', handler)
     editor.on('transaction', handler)
     window.addEventListener('resize', handler)
-    window.addEventListener('scroll', handler, true)
+    window.addEventListener('scroll', handler, { passive: true, capture: true })
 
     return () => {
       editor.off('selectionUpdate', handler)
@@ -125,15 +135,6 @@ export function CodeBlockLangMenu({ editor }: CodeBlockLangMenuProps) {
   )
 
   const currentLabel = LANGUAGE_BY_VALUE.get(currentLang) ?? currentLang
-
-  function selectLanguage(value: string) {
-    const { $head } = editor.state.selection
-    if ($head.parent.type.name !== 'codeBlock') return
-    const pos = $head.before($head.depth)
-    editor.chain().setNodeSelection(pos).updateAttributes('codeBlock', { language: value }).run()
-    setSearch('')
-    editor.commands.focus()
-  }
 
   return (
     <div className="pointer-events-none absolute z-20" style={{ top: position.top, left: position.left }}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import {
   Columns2,
@@ -53,7 +53,7 @@ export function TableMenu({ editor }: TableMenuProps) {
     // Also update on scroll/resize
     const scrollParent = editor.view.dom.closest('.overflow-y-auto')
     const onScroll = () => updatePosition()
-    scrollParent?.addEventListener('scroll', onScroll)
+    scrollParent?.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
 
     return () => {
@@ -63,6 +63,12 @@ export function TableMenu({ editor }: TableMenuProps) {
       window.removeEventListener('resize', onScroll)
     }
   }, [editor])
+
+  const addRowAfter = useCallback(() => editor?.chain().focus().addRowAfter().run(), [editor])
+  const deleteRow = useCallback(() => editor?.chain().focus().deleteRow().run(), [editor])
+  const addColumnAfter = useCallback(() => editor?.chain().focus().addColumnAfter().run(), [editor])
+  const deleteColumn = useCallback(() => editor?.chain().focus().deleteColumn().run(), [editor])
+  const deleteTable = useCallback(() => editor?.chain().focus().deleteTable().run(), [editor])
 
   if (!position || !editor) return null
 
@@ -74,7 +80,7 @@ export function TableMenu({ editor }: TableMenuProps) {
     >
       {/* Row operations */}
       <button
-        onClick={() => editor.chain().focus().addRowAfter().run()}
+        onClick={addRowAfter}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         title="Add row below"
       >
@@ -82,7 +88,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         <Plus className="size-3" />
       </button>
       <button
-        onClick={() => editor.chain().focus().deleteRow().run()}
+        onClick={deleteRow}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
         title="Delete row"
       >
@@ -94,7 +100,7 @@ export function TableMenu({ editor }: TableMenuProps) {
 
       {/* Column operations */}
       <button
-        onClick={() => editor.chain().focus().addColumnAfter().run()}
+        onClick={addColumnAfter}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         title="Add column right"
       >
@@ -102,7 +108,7 @@ export function TableMenu({ editor }: TableMenuProps) {
         <Plus className="size-3" />
       </button>
       <button
-        onClick={() => editor.chain().focus().deleteColumn().run()}
+        onClick={deleteColumn}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
         title="Delete column"
       >
@@ -114,7 +120,7 @@ export function TableMenu({ editor }: TableMenuProps) {
 
       {/* Delete table */}
       <button
-        onClick={() => editor.chain().focus().deleteTable().run()}
+        onClick={deleteTable}
         className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
         title="Delete table"
       >

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { useChat } from '@ai-sdk/react'
 import {
@@ -65,12 +65,8 @@ export function SelectionAIMenu({ editor, activeFilePath }: SelectionAIMenuProps
     .map((p) => (p as { type: 'text'; text: string }).text)
     .join('\n')
 
-  // Transition to 'result' when streaming completes
-  useEffect(() => {
-    if (phase === 'responding' && status === 'ready' && responseText) {
-      setPhase('result')
-    }
-  }, [phase, status, responseText])
+  // Derive result phase during render instead of useEffect
+  const resolvedPhase = phase === 'responding' && status === 'ready' && responseText ? 'result' : phase
 
   const triggerAction = useCallback(
     (action: SelectionAction) => {
@@ -95,39 +91,38 @@ export function SelectionAIMenu({ editor, activeFilePath }: SelectionAIMenuProps
     [editor, activeFilePath, sendMessage, setMessages],
   )
 
-  const handleReplace = useCallback(() => {
-    if (!savedSelectionRef.current || !responseText) return
-    const { from, to } = savedSelectionRef.current
-    editor.chain().focus().insertContentAt({ from, to }, responseText).run()
-    reset()
-  }, [editor, responseText])
-
-  const handleInsertBelow = useCallback(() => {
-    if (!savedSelectionRef.current || !responseText) return
-    const { to } = savedSelectionRef.current
-    editor.chain().focus().insertContentAt(to, `\n${responseText}`).run()
-    reset()
-  }, [editor, responseText])
-
   const reset = useCallback(() => {
     setPhase('idle')
     savedSelectionRef.current = null
     setMessages([])
   }, [setMessages])
 
+  const handleReplace = useCallback(() => {
+    if (!savedSelectionRef.current || !responseText) return
+    const { from, to } = savedSelectionRef.current
+    editor.chain().focus().insertContentAt({ from, to }, responseText).run()
+    reset()
+  }, [editor, responseText, reset])
+
+  const handleInsertBelow = useCallback(() => {
+    if (!savedSelectionRef.current || !responseText) return
+    const { to } = savedSelectionRef.current
+    editor.chain().focus().insertContentAt(to, `\n${responseText}`).run()
+    reset()
+  }, [editor, responseText, reset])
+
   const shouldShow = useCallback(
     ({ editor: ed, state }: { editor: Editor; state: typeof editor.state }) => {
-      if (phase !== 'idle') return true // keep showing during response
+      if (resolvedPhase !== 'idle') return true
       const { from, to } = state.selection
       if (from === to) return false
       const text = state.doc.textBetween(from, to, '\n')
       if (!text.trim()) return false
-      // Don't show in code blocks or tables
       if (ed.isActive('codeBlock')) return false
       if (ed.isActive('table')) return false
       return true
     },
-    [phase],
+    [resolvedPhase, editor],
   )
 
   return (
@@ -137,7 +132,7 @@ export function SelectionAIMenu({ editor, activeFilePath }: SelectionAIMenuProps
       options={{ placement: 'top', offset: { mainAxis: 8 } }}
     >
       <div className="rounded-lg border border-border bg-background/95 backdrop-blur-sm shadow-lg">
-        {phase === 'idle' && (
+        {resolvedPhase === 'idle' && (
           <div className="flex items-center gap-0.5 p-1">
             {ACTIONS.map((action) => {
               const Icon = action.icon
@@ -156,7 +151,7 @@ export function SelectionAIMenu({ editor, activeFilePath }: SelectionAIMenuProps
           </div>
         )}
 
-        {(phase === 'responding' || phase === 'result') && (
+        {(resolvedPhase === 'responding' || resolvedPhase === 'result') && (
           <div className="max-w-sm p-3">
             {/* Streaming response */}
             <div className="text-sm leading-relaxed text-foreground mb-3 max-h-60 overflow-y-auto">

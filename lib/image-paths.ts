@@ -1,3 +1,9 @@
+/** Hoisted regex for matching markdown image syntax */
+const IMAGE_REGEX = /(!\[[^\]]*\]\()([^)]+)\)/g
+
+/** Hoisted regex for matching resolved API image paths */
+const API_IMAGE_REGEX = /(!\[[^\]]*\]\()\/api\/content-files\?path=([^)]+)\)/g
+
 /**
  * Convert relative image paths in markdown to API query URLs for display in browser.
  * e.g., ![alt](assets/img.png) → ![alt](/api/content-files?path=guides/assets/img.png)
@@ -7,7 +13,7 @@
 export function resolveImagePaths(markdown: string, filePath: string): string {
   const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : ''
   return markdown.replace(
-    /(!\[[^\]]*\]\()([^)]+)\)/g,
+    IMAGE_REGEX,
     (match, prefix, src) => {
       // Skip external URLs and already-resolved paths
       if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/api/')) {
@@ -31,7 +37,7 @@ export function relativizeImagePaths(markdown: string, filePath: string): string
   const dir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : ''
 
   return markdown.replace(
-    /(!\[[^\]]*\]\()\/api\/content-files\?path=([^)]+)\)/g,
+    API_IMAGE_REGEX,
     (match, pre, encodedSrc) => {
       const src = decodeURIComponent(encodedSrc)
       if (dir && src.startsWith(dir + '/')) {
