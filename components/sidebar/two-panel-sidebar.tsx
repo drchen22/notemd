@@ -27,12 +27,12 @@ type OperationState =
   | { type: 'idle' }
   | { type: 'renaming'; path: string }
   | { type: 'deleting'; path: string }
-  | { type: 'creating'; parentPath: string; itemType: 'file' | 'folder' }
+  | { type: 'creating'; parentPath: string; itemType: 'file' | 'folder' | 'excalidraw' }
 
 type OperationAction =
   | { type: 'startRename'; path: string }
   | { type: 'startDelete'; path: string }
-  | { type: 'startCreate'; parentPath: string; itemType: 'file' | 'folder' }
+  | { type: 'startCreate'; parentPath: string; itemType: 'file' | 'folder' | 'excalidraw' }
   | { type: 'clear' }
 
 const IDLE: OperationState = { type: 'idle' }
@@ -162,7 +162,7 @@ export function TwoPanelSidebar({
   const renamingPath = operation.type === 'renaming' ? operation.path : null
   const deletingPath = operation.type === 'deleting' ? operation.path : null
   const creatingIn = operation.type === 'creating'
-    ? { parentPath: operation.parentPath, type: operation.itemType }
+    ? { parentPath: operation.parentPath, type: operation.itemType as 'file' | 'folder' | 'excalidraw' }
     : null
 
   // --- Navigation handlers ---
@@ -240,7 +240,7 @@ export function TwoPanelSidebar({
   )
 
   const handleCreate = useCallback(
-    async (type: 'file' | 'folder', parentPath: string, name: string) => {
+    async (type: 'file' | 'folder' | 'excalidraw', parentPath: string, name: string) => {
       dispatchOperation({ type: 'clear' })
       const fullPath = parentPath ? `${parentPath}/${name}` : name
       try {
@@ -248,7 +248,7 @@ export function TwoPanelSidebar({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: type === 'file' ? 'create-file' : 'create-folder',
+            action: type === 'folder' ? 'create-folder' : 'create-file',
             path: fullPath,
             content: '',
           }),
@@ -257,6 +257,8 @@ export function TwoPanelSidebar({
           refreshTree()
           if (type === 'file') {
             onFileSelect(fullPath.endsWith('.md') ? fullPath : fullPath + '.md')
+          } else if (type === 'excalidraw') {
+            onFileSelect(fullPath.endsWith('.excalidraw') ? fullPath : fullPath + '.excalidraw')
           }
         }
       } catch {
@@ -295,6 +297,7 @@ export function TwoPanelSidebar({
       onRequestDelete: (path: string) => dispatchOperation({ type: 'startDelete', path }),
       onCreateNote: (parentPath: string) => dispatchOperation({ type: 'startCreate', parentPath, itemType: 'file' }),
       onCreateFolder: (parentPath: string) => dispatchOperation({ type: 'startCreate', parentPath, itemType: 'folder' }),
+      onCreateExcalidraw: (parentPath: string) => dispatchOperation({ type: 'startCreate', parentPath, itemType: 'excalidraw' }),
       onRenameSubmit: handleRenameSubmit,
       onRenameCancel: () => dispatchOperation({ type: 'clear' }),
       onDeleteConfirm: handleDeleteConfirm,
@@ -323,6 +326,43 @@ export function TwoPanelSidebar({
     }
 
     const fullPath = `inbox/${name}.md`
+    try {
+      const res = await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create-file',
+          path: fullPath,
+          content: '',
+        }),
+      })
+      if (res.ok) {
+        refreshTree()
+        onSelectedCategoryChange('inbox')
+        setNavigationStack([])
+        onFileSelect(fullPath)
+      }
+    } catch {
+      // Silently fail
+    }
+  }, [tree, refreshTree, onSelectedCategoryChange, onFileSelect])
+
+  // --- New excalidraw: directly create in inbox with auto-generated name ---
+  const handleNewExcalidraw = useCallback(async () => {
+    const baseName = 'untitled'
+    const existingNames = new Set(
+      tree
+        ?.find((n) => n.path === 'inbox')
+        ?.children?.map((c) => c.name) ?? [],
+    )
+    let name = baseName
+    let counter = 1
+    while (existingNames.has(`${name}.excalidraw`)) {
+      counter++
+      name = `${baseName}-${counter}`
+    }
+
+    const fullPath = `inbox/${name}.excalidraw`
     try {
       const res = await fetch('/api/files', {
         method: 'POST',
@@ -382,6 +422,7 @@ export function TwoPanelSidebar({
           creatingIn={creatingIn}
           isLoading={isLoading}
           onNewNote={handleNewNote}
+          onNewExcalidraw={handleNewExcalidraw}
           leftCollapsed={leftCollapsed}
           onExpandLeft={handleLeftExpand}
           folders={folders}

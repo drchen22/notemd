@@ -1,12 +1,12 @@
 'use client'
 
 import { useRef, useEffect, useCallback, type KeyboardEvent } from 'react'
-import { FileText, Folder } from 'lucide-react'
+import { FileText, Folder, PenTool } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
 interface NewItemInputProps {
-  type: 'file' | 'folder'
+  type: 'file' | 'folder' | 'excalidraw'
   depth: number
   onSubmit: (name: string) => void
   onCancel: () => void
@@ -33,10 +33,12 @@ export function NewItemInput({ type, depth, onSubmit, onCancel }: NewItemInputPr
       onCancel()
       return
     }
-    // For files, auto-append .md if missing
+    // For files, auto-append extension if missing
     let name = raw
     if (type === 'file' && !name.endsWith('.md')) {
       name += '.md'
+    } else if (type === 'excalidraw' && !name.endsWith('.excalidraw')) {
+      name += '.excalidraw'
     }
     onSubmit(name)
   }, [type, onCancel, onSubmit])
@@ -59,7 +61,7 @@ export function NewItemInput({ type, depth, onSubmit, onCancel }: NewItemInputPr
     setTimeout(commit, 100)
   }, [commit])
 
-  const Icon = type === 'file' ? FileText : Folder
+  const Icon = type === 'excalidraw' ? PenTool : type === 'file' ? FileText : Folder
 
   return (
     <div
@@ -71,7 +73,7 @@ export function NewItemInput({ type, depth, onSubmit, onCancel }: NewItemInputPr
       <Icon className="size-4 shrink-0 text-sidebar-foreground/30" />
       <input
         ref={inputRef}
-        placeholder={type === 'file' ? 'untitled.md' : 'New Folder'}
+        placeholder={type === 'excalidraw' ? 'untitled.excalidraw' : type === 'file' ? 'untitled.md' : 'New Folder'}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         className="h-5 w-full rounded border border-sidebar-primary/40 bg-sidebar px-1.5 text-[0.8125rem] text-sidebar-foreground outline-none focus:border-sidebar-primary/70"

@@ -28,11 +28,13 @@ interface ContentsPanelProps {
   /** Operation state */
   renamingPath: string | null
   deletingPath: string | null
-  creatingIn: { parentPath: string; type: 'file' | 'folder' } | null
+  creatingIn: { parentPath: string; type: 'file' | 'folder' | 'excalidraw' } | null
   /** Whether the panel is loading */
   isLoading: boolean
   /** Create a new note in inbox */
   onNewNote: () => void
+  /** Create a new excalidraw whiteboard in inbox */
+  onNewExcalidraw?: () => void
   /** Whether the left panel is collapsed */
   leftCollapsed?: boolean
   /** Expand the left panel */
@@ -90,6 +92,7 @@ export function ContentsPanel({
   creatingIn,
   isLoading,
   onNewNote,
+  onNewExcalidraw,
   leftCollapsed,
   onExpandLeft,
   folders,
@@ -177,6 +180,7 @@ export function ContentsPanel({
       segments={breadcrumbSegments}
       onNavigate={onBreadcrumbClick}
       onNewNote={onNewNote}
+      onNewExcalidraw={onNewExcalidraw}
       leftCollapsed={leftCollapsed}
       onExpandLeft={onExpandLeft}
     />
@@ -186,6 +190,7 @@ export function ContentsPanel({
       segments={[]}
       onNavigate={() => {}}
       onNewNote={onNewNote}
+      onNewExcalidraw={onNewExcalidraw}
       leftCollapsed={leftCollapsed}
       onExpandLeft={onExpandLeft}
     />

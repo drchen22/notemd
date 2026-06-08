@@ -10,29 +10,38 @@ import {
   isEmptyFrontmatter,
 } from '@/lib/frontmatter'
 
-const CONTENT_DIR = path.join(process.cwd(), 'content')
+import { getContentDir } from '@/lib/content-dir'
+
+const ALLOWED_EXTENSIONS = ['.md', '.excalidraw']
+
+/** Check if a file path has a supported extension */
+function isAllowedFile(filePath: string): boolean {
+  return ALLOWED_EXTENSIONS.some((ext) => filePath.endsWith(ext))
+}
 
 /** Resolve and validate a path inside the content directory */
 function resolveSafePath(filePath: string) {
-  const resolved = path.resolve(CONTENT_DIR, filePath)
+  const contentDir = getContentDir()
+  const resolved = path.resolve(contentDir, filePath)
   if (
-    !resolved.startsWith(CONTENT_DIR + path.sep) &&
-    resolved !== CONTENT_DIR
+    !resolved.startsWith(contentDir + path.sep) &&
+    resolved !== contentDir
   ) {
     throw new Error('Forbidden: path traversal detected')
   }
-  if (!resolved.endsWith('.md')) {
-    throw new Error('Forbidden: only .md files are allowed')
+  if (!isAllowedFile(resolved)) {
+    throw new Error('Forbidden: only .md and .excalidraw files are allowed')
   }
   return resolved
 }
 
 /** Resolve and validate a folder/any-item path inside the content directory (no .md restriction) */
 function resolveSafePathForItem(itemPath: string) {
-  const resolved = path.resolve(CONTENT_DIR, itemPath)
+  const contentDir = getContentDir()
+  const resolved = path.resolve(contentDir, itemPath)
   if (
-    !resolved.startsWith(CONTENT_DIR + path.sep) &&
-    resolved !== CONTENT_DIR
+    !resolved.startsWith(contentDir + path.sep) &&
+    resolved !== contentDir
   ) {
     throw new Error('Forbidden: path traversal detected')
   }
@@ -77,22 +86,24 @@ async function readDirectory(
       const children = await readDirectory(fullPath, relativePath)
       // Show empty folders so users can see newly created ones
       nodes.push({ name: entry.name, path: relativePath, type: 'folder', children })
-    } else if (entry.isFile() && entry.name.endsWith('.md')) {
-      // Parse frontmatter for file nodes
+    } else if (entry.isFile() && isAllowedFile(entry.name)) {
+      // Parse frontmatter for .md file nodes
       let frontmatter: NoteFrontmatter | undefined
       let preview: string | undefined
-      try {
-        const raw = await fs.readFile(fullPath, 'utf-8')
-        const parsed = parseFrontmatter(raw)
-        frontmatter = parsed.frontmatter
-        if (isEmptyFrontmatter(frontmatter)) frontmatter = undefined
-        // Extract preview: first ~200 chars of body, stripped of markdown symbols
-        const body = parsed.content.replace(/^#+\s.*$/gm, '').trim()
-        if (body) {
-          preview = body.slice(0, 200).replace(/\n{2,}/g, ' ').replace(/\n/g, ' ').trim()
+      if (entry.name.endsWith('.md')) {
+        try {
+          const raw = await fs.readFile(fullPath, 'utf-8')
+          const parsed = parseFrontmatter(raw)
+          frontmatter = parsed.frontmatter
+          if (isEmptyFrontmatter(frontmatter)) frontmatter = undefined
+          // Extract preview: first ~200 chars of body, stripped of markdown symbols
+          const body = parsed.content.replace(/^#+\s.*$/gm, '').trim()
+          if (body) {
+            preview = body.slice(0, 200).replace(/\n{2,}/g, ' ').replace(/\n/g, ' ').trim()
+          }
+        } catch {
+          // Skip frontmatter on read error — still include the node
         }
-      } catch {
-        // Skip frontmatter on read error — still include the node
       }
       nodes.push({ name: entry.name, path: relativePath, type: 'file', frontmatter, preview })
     }
@@ -110,7 +121,7 @@ async function readDirectory(
 export async function listFiles(): Promise<
   { name: string; path: string; type: 'file' | 'folder' }[]
 > {
-  const tree = await readDirectory(CONTENT_DIR, '')
+  const tree = await readDirectory(getContentDir(), '')
 
   function flatten(nodes: FileTreeNode[]): { name: string; path: string; type: 'file' | 'folder' }[] {
     return nodes.flatMap((n) => [
@@ -124,18 +135,24 @@ export async function listFiles(): Promise<
 
 /** Read the directory tree (exported for API route reuse) */
 export async function getTree(): Promise<FileTreeNode[]> {
-  return readDirectory(CONTENT_DIR, '')
+  return readDirectory(getContentDir(), '')
 }
 
-/** Read a markdown file's content with frontmatter parsed separately */
+/** Read a file's content.
+ *  For .md files, frontmatter is parsed separately.
+ *  For .excalidraw files, raw JSON content is returned directly. */
 export async function readFile(filePath: string): Promise<FileReadResult> {
   const resolved = resolveSafePath(filePath)
   const raw = await fs.readFile(resolved, 'utf-8')
+  if (filePath.endsWith('.excalidraw')) {
+    return { content: raw, frontmatter: {} }
+  }
   return parseFrontmatter(raw)
 }
 
-/** Write content to a markdown file (full replacement).
- *  Optionally accepts frontmatter to prepend as YAML block. */
+/** Write content to a file (full replacement).
+ *  For .md files, optionally accepts frontmatter to prepend as YAML block.
+ *  For .excalidraw files, raw content is written directly. */
 export async function writeFile(
   filePath: string,
   content: string,
@@ -146,9 +163,12 @@ export async function writeFile(
   // Ensure parent directories exist
   await fs.mkdir(path.dirname(resolved), { recursive: true })
 
-  const fullContent = frontmatter && !isEmptyFrontmatter(frontmatter)
-    ? stringifyFrontmatter(frontmatter, content)
-    : content
+  const fullContent =
+    filePath.endsWith('.excalidraw')
+      ? content
+      : frontmatter && !isEmptyFrontmatter(frontmatter)
+        ? stringifyFrontmatter(frontmatter, content)
+        : content
 
   await fs.writeFile(resolved, fullContent, 'utf-8')
 }
@@ -184,13 +204,14 @@ export async function editFile(
   return { replacements: 1 }
 }
 
-/** Create a new .md file with auto-generated frontmatter */
+/** Create a new file with auto-generated frontmatter (for .md) or empty scene (for .excalidraw) */
 export async function createFile(
   filePath: string,
   content = ''
 ): Promise<void> {
-  // Ensure .md extension
-  if (!filePath.endsWith('.md')) {
+  const isExcalidraw = filePath.endsWith('.excalidraw')
+  // Ensure extension is present
+  if (!isAllowedFile(filePath)) {
     filePath += '.md'
   }
   validateName(path.basename(filePath))
@@ -205,10 +226,14 @@ export async function createFile(
     // File doesn't exist — proceed
   }
 
-  const defaultFm = generateDefaultFrontmatter(filePath)
-  const fullContent = content
-    ? stringifyFrontmatter(defaultFm, content)
-    : stringifyFrontmatter(defaultFm, '')
+  const fullContent = isExcalidraw
+    ? (content || '{"type":"excalidraw","version":2,"source":"","elements":[],"appState":{"gridSize":null}}')
+    : (() => {
+        const defaultFm = generateDefaultFrontmatter(filePath)
+        return content
+          ? stringifyFrontmatter(defaultFm, content)
+          : stringifyFrontmatter(defaultFm, '')
+      })()
 
   await fs.mkdir(path.dirname(resolved), { recursive: true })
   await fs.writeFile(resolved, fullContent, 'utf-8')
@@ -264,9 +289,10 @@ export async function renameItem(
   // Build new path at the same parent level
   const parentDir = path.dirname(oldResolved)
 
-  // If the source is a .md file and the new name doesn't end with .md, append it
-  const isFile = itemPath.endsWith('.md')
-  const finalName = isFile && !newName.endsWith('.md') ? newName + '.md' : newName
+  // If the source is a known file type and the new name doesn't have the extension, append it
+  const isFile = isAllowedFile(itemPath)
+  const ext = path.extname(itemPath)
+  const finalName = isFile && ext && !newName.endsWith(ext) ? newName + ext : newName
 
   const newResolved = path.join(parentDir, finalName)
 
@@ -282,7 +308,7 @@ export async function renameItem(
   await fs.rename(oldResolved, newResolved)
 
   // Return new relative path
-  return path.relative(CONTENT_DIR, newResolved)
+  return path.relative(getContentDir(), newResolved)
 }
 
 /** Move a file or folder into a target directory. Returns the new relative path. */
@@ -290,10 +316,11 @@ export async function moveItem(
   sourcePath: string,
   targetDir: string
 ): Promise<string> {
+  const contentDir = getContentDir()
   const sourceResolved = resolveSafePathForItem(sourcePath)
   const targetDirResolved = targetDir
     ? resolveSafePathForItem(targetDir)
-    : CONTENT_DIR
+    : contentDir
 
   // Check source exists
   try {
@@ -333,5 +360,5 @@ export async function moveItem(
 
   await fs.rename(sourceResolved, newResolved)
 
-  return path.relative(CONTENT_DIR, newResolved)
+  return path.relative(contentDir, newResolved)
 }

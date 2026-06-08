@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { FileText, FolderInput, Pencil, Trash2, Folder, Check } from 'lucide-react'
+import { FileText, FolderInput, Pencil, Trash2, Folder, Check, PenTool } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 
 import type { FileTreeNode } from '@/types/file-tree'
@@ -23,9 +23,9 @@ function formatDate(dateStr?: string): string {
   }
 }
 
-/** Strip .md extension from filename */
-function stripMdExt(name: string): string {
-  return name.endsWith('.md') ? name.slice(0, -3) : name
+/** Strip known extension from filename */
+function stripExt(name: string): string {
+  return name.replace(/\.(md|excalidraw)$/, '')
 }
 
 /** Get parent directory of a file path */
@@ -65,7 +65,7 @@ export const NoteCard = memo(function NoteCard({
   folders,
   onMoveTo,
 }: NoteCardProps) {
-  const title = node.frontmatter?.title || stripMdExt(node.name)
+  const title = node.frontmatter?.title || stripExt(node.name)
   const dateStr = node.frontmatter?.date
   const formattedDate = formatDate(dateStr)
   const preview = node.preview
@@ -86,16 +86,26 @@ export const NoteCard = memo(function NoteCard({
       )}
 
       <div className="flex items-start gap-3 mb-2">
-        <FileText
-          className={cn(
-            'size-[15px] shrink-0 mt-1',
-            isActive ? 'text-[#4a4a4a]/70' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
-          )}
-          strokeWidth={1.5}
-        />
+        {node.name.endsWith('.excalidraw') ? (
+          <PenTool
+            className={cn(
+              'size-[15px] shrink-0 mt-1',
+              isActive ? 'text-[#4a4a4a]/70' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
+            )}
+            strokeWidth={1.5}
+          />
+        ) : (
+          <FileText
+            className={cn(
+              'size-[15px] shrink-0 mt-1',
+              isActive ? 'text-[#4a4a4a]/70' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
+            )}
+            strokeWidth={1.5}
+          />
+        )}
         {isRenaming ? (
           <InlineRenameInput
-            initialName={stripMdExt(node.name)}
+            initialName={stripExt(node.name)}
             onSubmit={(newName) => onRenameSubmit(node.path, newName)}
             onCancel={onRenameCancel}
             depth={0}

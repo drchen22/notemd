@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
 
-const CONTENT_DIR = path.join(process.cwd(), 'content')
+import { getContentDir } from '@/lib/content-dir'
 
 const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -22,8 +22,9 @@ export async function GET(request: Request) {
   }
 
   // Prevent path traversal
-  const resolvedPath = path.resolve(CONTENT_DIR, filePath)
-  if (!resolvedPath.startsWith(CONTENT_DIR + path.sep) && resolvedPath !== CONTENT_DIR) {
+  const contentDir = getContentDir()
+  const resolvedPath = path.resolve(contentDir, filePath)
+  if (!resolvedPath.startsWith(contentDir + path.sep) && resolvedPath !== contentDir) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

@@ -70,7 +70,10 @@ export async function PUT(request: Request) {
     }
 
     // If frontmatter is not provided by the client, preserve existing frontmatter
-    if (frontmatter === undefined) {
+    // For .excalidraw files, just write raw content directly
+    if (filePath.endsWith('.excalidraw')) {
+      await writeFile(filePath, content)
+    } else if (frontmatter === undefined) {
       try {
         const existing = await readFile(filePath)
         await writeFile(filePath, content, existing.frontmatter)

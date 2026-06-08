@@ -14,6 +14,11 @@ const NoteEditor = dynamic(
   { ssr: false, loading: () => <div className="flex-1 bg-background" /> },
 )
 
+const ExcalidrawEditor = dynamic(
+  () => import('@/components/excalidraw/excalidraw-editor'),
+  { ssr: false, loading: () => <div className="flex-1 bg-background" /> },
+)
+
 const FullPageChat = dynamic(
   () => import('@/components/ai/fullpage-chat').then((mod) => mod.FullPageChat),
   { ssr: false },
@@ -126,6 +131,11 @@ export default function Home() {
       <div className="min-w-0 flex-1 flex flex-col">
         {showFullChat ? (
           <FullPageChat onClose={handleCloseFullChat} />
+        ) : activeFilePath?.endsWith('.excalidraw') ? (
+          <ExcalidrawEditor
+            sceneContent={markdownContent}
+            activeFilePath={activeFilePath}
+          />
         ) : (
           <NoteEditor
             markdownContent={markdownContent}

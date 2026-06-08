@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState } from 'react'
-import { FileText, Folder, FolderOpen, FolderInput, ChevronRight, FilePlus2, FolderPlus, Pencil, Trash2, Check } from 'lucide-react'
+import { FileText, Folder, FolderOpen, FolderInput, ChevronRight, FilePlus2, FolderPlus, Pencil, Trash2, Check, PenTool } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 
 import type { FileTreeNode } from '@/types/file-tree'
@@ -24,11 +24,12 @@ export interface FileTreeItemCallbacks {
   onRequestDelete: (path: string) => void
   onCreateNote: (parentPath: string) => void
   onCreateFolder: (parentPath: string) => void
+  onCreateExcalidraw: (parentPath: string) => void
   onRenameSubmit: (path: string, newName: string) => void
   onRenameCancel: () => void
   onDeleteConfirm: (path: string) => void
   onDeleteCancel: () => void
-  onCreateSubmit: (type: 'file' | 'folder', parentPath: string, name: string) => void
+  onCreateSubmit: (type: 'file' | 'folder' | 'excalidraw', parentPath: string, name: string) => void
   onCreateCancel: () => void
   folders: FolderOption[]
   onMoveTo: (sourcePath: string, targetDir: string) => void
@@ -41,7 +42,7 @@ interface FileTreeItemProps extends FileTreeItemCallbacks {
   depth: number
   renamingPath: string | null
   deletingPath: string | null
-  creatingIn: { parentPath: string; type: 'file' | 'folder' } | null
+  creatingIn: { parentPath: string; type: 'file' | 'folder' | 'excalidraw' } | null
   onFolderClick?: (path: string) => void
 }
 
@@ -57,6 +58,7 @@ export const FileTreeItem = memo(function FileTreeItem({
   onRequestDelete,
   onCreateNote,
   onCreateFolder,
+  onCreateExcalidraw,
   onRenameSubmit,
   onRenameCancel,
   onDeleteConfirm,
@@ -77,7 +79,7 @@ export const FileTreeItem = memo(function FileTreeItem({
   const isOpen = isCreatingHere || isOpenUser
 
   const callbacks: FileTreeItemCallbacks = {
-    onRequestRename, onRequestDelete, onCreateNote, onCreateFolder,
+    onRequestRename, onRequestDelete, onCreateNote, onCreateFolder, onCreateExcalidraw,
     onRenameSubmit, onRenameCancel, onDeleteConfirm, onDeleteCancel,
     onCreateSubmit, onCreateCancel, folders, onMoveTo,
   }
@@ -182,6 +184,9 @@ export const FileTreeItem = memo(function FileTreeItem({
             <ContextMenuItem onClick={() => { onCreateNote(node.path) }}>
               <FilePlus2 className="size-3.5" strokeWidth={1.5} /> New Note
             </ContextMenuItem>
+            <ContextMenuItem onClick={() => { onCreateExcalidraw(node.path) }}>
+              <PenTool className="size-3.5" strokeWidth={1.5} /> New Whiteboard
+            </ContextMenuItem>
             <ContextMenuItem onClick={() => { onCreateFolder(node.path) }}>
               <FolderPlus className="size-3.5" strokeWidth={1.5} /> New Folder
             </ContextMenuItem>
@@ -245,13 +250,23 @@ export const FileTreeItem = memo(function FileTreeItem({
       )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
     >
-      <FileText
-        className={cn(
-          'size-3.5 shrink-0 transition-colors',
-          isActive ? 'text-[#4a4a4a]' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
-        )}
-        strokeWidth={1.5}
-      />
+      {node.name.endsWith('.excalidraw') ? (
+        <PenTool
+          className={cn(
+            'size-3.5 shrink-0 transition-colors',
+            isActive ? 'text-[#4a4a4a]' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
+          )}
+          strokeWidth={1.5}
+        />
+      ) : (
+        <FileText
+          className={cn(
+            'size-3.5 shrink-0 transition-colors',
+            isActive ? 'text-[#4a4a4a]' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
+          )}
+          strokeWidth={1.5}
+        />
+      )}
       {isRenaming ? (
         <InlineRenameInput
           initialName={node.name}
@@ -261,7 +276,7 @@ export const FileTreeItem = memo(function FileTreeItem({
           className="!ml-0"
         />
       ) : (
-        <span className="truncate">{node.name.replace(/\.md$/, '')}</span>
+        <span className="truncate">{node.name.replace(/\.(md|excalidraw)$/, '')}</span>
       )}
     </button>
   )

@@ -3,7 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 
-const CONTENT_DIR = path.join(process.cwd(), 'content')
+import { getContentDir } from '@/lib/content-dir'
 
 export async function POST(request: Request) {
   try {
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     // Determine target directory: content/{fileDir}/assets/
     const fileDir = filePath ? path.dirname(filePath) : ''
-    const assetsDir = path.join(CONTENT_DIR, fileDir, 'assets')
+    const assetsDir = path.join(getContentDir(), fileDir, 'assets')
     await fs.mkdir(assetsDir, { recursive: true })
 
     // Generate unique filename preserving extension
