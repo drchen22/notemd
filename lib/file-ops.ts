@@ -11,6 +11,7 @@ import {
 } from '@/lib/frontmatter'
 
 import { getContentDir } from '@/lib/content-dir'
+import { migrateAttachments } from '@/lib/attachment-mover'
 
 const ALLOWED_EXTENSIONS = ['.md', '.excalidraw']
 
@@ -360,5 +361,17 @@ export async function moveItem(
 
   await fs.rename(sourceResolved, newResolved)
 
-  return path.relative(contentDir, newResolved)
+  const newPath = path.relative(contentDir, newResolved)
+
+  // Migrate attachments for file moves (folder moves already carry assets/ via fs.rename)
+  try {
+    const stat = await fs.stat(newResolved)
+    if (stat.isFile()) {
+      await migrateAttachments(sourcePath, newPath)
+    }
+  } catch {
+    // Non-critical — attachment migration failure should not break the move
+  }
+
+  return newPath
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer, useRef, useState, useCallback, useMemo } from 'react'
 import { MessageSquare } from 'lucide-react'
+import { SettingsDialog } from '@/components/settings/storage-settings'
 
 import type { FileTreeNode } from '@/types/file-tree'
 
@@ -430,9 +431,9 @@ export function TwoPanelSidebar({
         />
       </div>
 
-      {/* Footer: New Chat button */}
-      {onOpenFullChat ? (
-        <div className="border-t border-[#e8e6e3] px-3 py-2.5">
+      {/* Footer: Chat + Settings */}
+      <div className="border-t border-[#e8e6e3] px-3 py-2.5 space-y-0.5">
+        {onOpenFullChat ? (
           <button
             onClick={onOpenFullChat}
             onMouseEnter={onPreloadFullChat}
@@ -442,8 +443,9 @@ export function TwoPanelSidebar({
             <MessageSquare className="size-[15px] shrink-0" strokeWidth={1.5} />
             <span>新对话</span>
           </button>
-        </div>
-      ) : null}
+        ) : null}
+        <SettingsDialog />
+      </div>
     </aside>
   )
 }
