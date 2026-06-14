@@ -404,6 +404,11 @@ export function TwoPanelSidebar({
               onRequestDelete={(path) => dispatchOperation({ type: 'startDelete', path })}
               width={categoryPanelWidth}
               onCollapse={handleLeftCollapse}
+              onCreateFolder={callbacks.onCreateFolder}
+              onCreateTopFolder={() => dispatchOperation({ type: 'startCreate', parentPath: '', itemType: 'folder' })}
+              creatingIn={creatingIn}
+              onCreateSubmit={handleCreate}
+              onCreateCancel={callbacks.onCreateCancel}
             />
             <PanelDivider onResize={handleCategoryPanelResize} />
           </>
@@ -424,6 +429,12 @@ export function TwoPanelSidebar({
           isLoading={isLoading}
           onNewNote={handleNewNote}
           onNewExcalidraw={handleNewExcalidraw}
+          onNewFolder={() => {
+            const currentFolderPath = navigationStack.length > 0
+              ? navigationStack[navigationStack.length - 1]
+              : selectedCategory === '__root__' ? '' : (selectedCategory ?? '')
+            callbacks.onCreateFolder(currentFolderPath)
+          }}
           leftCollapsed={leftCollapsed}
           onExpandLeft={handleLeftExpand}
           folders={folders}

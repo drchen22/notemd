@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useCallback } from 'react'
-import { Folder, FolderOpen, FileText, Inbox } from 'lucide-react'
+import { Folder, FolderOpen, FileText, Inbox, FolderPlus } from 'lucide-react'
 
 import type { FileTreeNode } from '@/types/file-tree'
 
@@ -16,10 +16,12 @@ interface CategoryItemProps {
   isSelected: boolean
   onSelect: (path: string) => void
   isRenaming: boolean
-  onRenameSubmit: (newName: string) => void
+  onRenameSubmit: (path: string, newName: string) => void
   onRenameCancel: () => void
   onRequestRename: (path: string) => void
   onRequestDelete: (path: string) => void
+  /** Create a subfolder inside this category */
+  onCreateFolder: (parentPath: string) => void
   /** Number of items in this category */
   itemCount?: number
 }
@@ -34,6 +36,7 @@ export const CategoryItem = memo(function CategoryItem({
   onRenameCancel,
   onRequestRename,
   onRequestDelete,
+  onCreateFolder,
   itemCount = 0,
 }: CategoryItemProps) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -87,7 +90,7 @@ export const CategoryItem = memo(function CategoryItem({
         {isRenaming && (
           <InlineRenameInput
             initialName={node.name}
-            onSubmit={onRenameSubmit}
+            onSubmit={(newName) => onRenameSubmit(node.path, newName)}
             onCancel={onRenameCancel}
             depth={0}
             className="!ml-0 text-center"
@@ -99,6 +102,10 @@ export const CategoryItem = memo(function CategoryItem({
       {!virtualType && (
         <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <ContextMenuContent>
+            <ContextMenuItem onClick={() => { onCreateFolder(node.path); setMenuOpen(false) }}>
+              <FolderPlus className="size-3.5" strokeWidth={1.5} /> New Folder
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem onClick={() => { onRequestRename(node.path); setMenuOpen(false) }}>
               Rename
             </ContextMenuItem>

@@ -43,12 +43,10 @@ export function stringifyFrontmatter(
 export function generateDefaultFrontmatter(
   filePath: string
 ): NoteFrontmatter {
-  // Extract filename without extension, replace hyphens/underscores with spaces
+  // Extract filename without extension, derive a human-readable title
   const basename = filePath.split('/').pop() ?? filePath
   const nameWithoutExt = basename.replace(/\.md$/, '')
-  const title = nameWithoutExt
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  const title = slugToTitle(nameWithoutExt)
 
   const date = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
@@ -58,4 +56,28 @@ export function generateDefaultFrontmatter(
 /** Check if a frontmatter object has no fields. */
 export function isEmptyFrontmatter(fm: NoteFrontmatter): boolean {
   return Object.keys(fm).length === 0
+}
+
+/**
+ * Convert a filename slug into a human-readable title.
+ * "my-new-post" → "My New Post". Inverse of titleToSlug (lossy).
+ */
+export function slugToTitle(slug: string): string {
+  return slug
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/**
+ * Convert a human-readable title into a safe filename slug.
+ * "My New Post" → "my-new-post"
+ */
+export function titleToSlug(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')       // spaces & underscores → hyphens
+    .replace(/[^a-z0-9一-鿿-]/g, '') // keep letters, digits, CJK, hyphens
+    .replace(/-+/g, '-')            // collapse multiple hyphens
+    .replace(/^-|-$/g, '')          // trim leading/trailing hyphens
 }

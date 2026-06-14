@@ -53,7 +53,7 @@ export function InlineRenameInput({
       return
     }
     onSubmit(newName)
-  }, [initialName, isFile, onCancel, onSubmit])
+  }, [initialName, isFile, ext, onCancel, onSubmit])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {

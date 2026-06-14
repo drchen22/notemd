@@ -5,9 +5,13 @@ import {
   deleteOrphanAttachments,
 } from '@/lib/orphan-detector'
 import { analyzeStorage } from '@/lib/storage-analyzer'
+import { requireAuth } from '@/lib/auth'
 
 /** GET /api/attachments?action=orphans — list orphaned attachments */
 export async function GET(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
+
   const { searchParams } = new URL(request.url)
   const action = searchParams.get('action')
 
@@ -41,6 +45,8 @@ export async function GET(request: Request) {
 
 /** DELETE /api/attachments — delete selected orphan attachments */
 export async function DELETE(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
   try {
     const body = await request.json()
     const { paths }: { paths?: string[] } = body

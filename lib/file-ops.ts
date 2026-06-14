@@ -8,6 +8,7 @@ import {
   stringifyFrontmatter,
   generateDefaultFrontmatter,
   isEmptyFrontmatter,
+  slugToTitle,
 } from '@/lib/frontmatter'
 
 import { getContentDir } from '@/lib/content-dir'
@@ -65,20 +66,21 @@ export interface FileReadResult {
   frontmatter: NoteFrontmatter
 }
 
-/** Recursively read directory tree */
+/** Recursively read directory tree. I/O within each directory is parallelized. */
 async function readDirectory(
   dir: string,
   basePath: string
 ): Promise<FileTreeNode[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true })
-  const nodes: FileTreeNode[] = []
 
   // Directories to hide from the file tree (e.g. asset/image folders)
   const HIDDEN_DIRS = new Set(['assets'])
 
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue
-    if (entry.isDirectory() && HIDDEN_DIRS.has(entry.name)) continue
+  // Build each entry's node concurrently — subdirectories recurse in parallel,
+  // .md files are read + parsed in parallel.
+  const nodePromises = entries.map(async (entry): Promise<FileTreeNode | null> => {
+    if (entry.name.startsWith('.')) return null
+    if (entry.isDirectory() && HIDDEN_DIRS.has(entry.name)) return null
 
     const fullPath = path.join(dir, entry.name)
     const relativePath = path.join(basePath, entry.name)
@@ -86,8 +88,9 @@ async function readDirectory(
     if (entry.isDirectory()) {
       const children = await readDirectory(fullPath, relativePath)
       // Show empty folders so users can see newly created ones
-      nodes.push({ name: entry.name, path: relativePath, type: 'folder', children })
-    } else if (entry.isFile() && isAllowedFile(entry.name)) {
+      return { name: entry.name, path: relativePath, type: 'folder', children }
+    }
+    if (entry.isFile() && isAllowedFile(entry.name)) {
       // Parse frontmatter for .md file nodes
       let frontmatter: NoteFrontmatter | undefined
       let preview: string | undefined
@@ -106,9 +109,14 @@ async function readDirectory(
           // Skip frontmatter on read error — still include the node
         }
       }
-      nodes.push({ name: entry.name, path: relativePath, type: 'file', frontmatter, preview })
+      return { name: entry.name, path: relativePath, type: 'file', frontmatter, preview }
     }
-  }
+    return null
+  })
+
+  const nodes = (await Promise.all(nodePromises)).filter(
+    (n): n is FileTreeNode => n !== null,
+  )
 
   nodes.sort((a, b) => {
     if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
@@ -134,9 +142,20 @@ export async function listFiles(): Promise<
   return flatten(tree)
 }
 
-/** Read the directory tree (exported for API route reuse) */
+// Module-level tree cache. Reading the full vault (every .md parsed for a
+// preview) is expensive; mutations invalidate it so the next read is fresh.
+let treeCache: FileTreeNode[] | null = null
+
+/** Invalidate the cached tree — call after any filesystem mutation. */
+function invalidateTreeCache() {
+  treeCache = null
+}
+
+/** Read the directory tree (exported for API route reuse). Cached between mutations. */
 export async function getTree(): Promise<FileTreeNode[]> {
-  return readDirectory(getContentDir(), '')
+  if (treeCache) return treeCache
+  treeCache = await readDirectory(getContentDir(), '')
+  return treeCache
 }
 
 /** Read a file's content.
@@ -172,6 +191,7 @@ export async function writeFile(
         : content
 
   await fs.writeFile(resolved, fullContent, 'utf-8')
+  invalidateTreeCache()
 }
 
 /**
@@ -202,6 +222,7 @@ export async function editFile(
 
   const updated = content.replace(oldText, newText)
   await fs.writeFile(resolved, updated, 'utf-8')
+  invalidateTreeCache()
   return { replacements: 1 }
 }
 
@@ -218,15 +239,6 @@ export async function createFile(
   validateName(path.basename(filePath))
   const resolved = resolveSafePath(filePath)
 
-  // Check if already exists
-  try {
-    await fs.access(resolved)
-    throw new Error('File already exists')
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message === 'File already exists') throw err
-    // File doesn't exist — proceed
-  }
-
   const fullContent = isExcalidraw
     ? (content || '{"type":"excalidraw","version":2,"source":"","elements":[],"appState":{"gridSize":null}}')
     : (() => {
@@ -237,7 +249,17 @@ export async function createFile(
       })()
 
   await fs.mkdir(path.dirname(resolved), { recursive: true })
-  await fs.writeFile(resolved, fullContent, 'utf-8')
+  // Atomic create: 'wx' fails with EEXIST if the file already exists,
+  // closing the access-then-write TOCTOU race.
+  try {
+    await fs.writeFile(resolved, fullContent, { encoding: 'utf-8', flag: 'wx' })
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error('File already exists')
+    }
+    throw err
+  }
+  invalidateTreeCache()
 }
 
 /** Create a new directory */
@@ -255,6 +277,7 @@ export async function createFolder(folderPath: string): Promise<void> {
   }
 
   await fs.mkdir(resolved, { recursive: true })
+  invalidateTreeCache()
 }
 
 /** Delete a file or folder (recursive) */
@@ -269,13 +292,16 @@ export async function deleteItem(itemPath: string): Promise<void> {
   }
 
   await fs.rm(resolved, { recursive: true, force: true })
+  invalidateTreeCache()
 }
 
 /** Rename a file or folder. Returns the new relative path. */
 export async function renameItem(
   itemPath: string,
-  newName: string
+  newName: string,
+  opts: { syncTitleToFilename?: boolean } = {},
 ): Promise<string> {
+  const { syncTitleToFilename = true } = opts
   validateName(newName)
 
   const oldResolved = resolveSafePathForItem(itemPath)
@@ -308,7 +334,24 @@ export async function renameItem(
 
   await fs.rename(oldResolved, newResolved)
 
+  // For .md files, sync the frontmatter title with the new filename.
+  // Skipped for title-driven renames (rename-from-title), where the editor
+  // owns the title and writes the file itself right after.
+  if (syncTitleToFilename && finalName.endsWith('.md')) {
+    try {
+      const raw = await fs.readFile(newResolved, 'utf-8')
+      const parsed = parseFrontmatter(raw)
+      const basename = finalName.replace(/\.md$/, '')
+      parsed.frontmatter.title = slugToTitle(basename)
+      const updated = stringifyFrontmatter(parsed.frontmatter, parsed.content)
+      await fs.writeFile(newResolved, updated, 'utf-8')
+    } catch {
+      // Non-critical — title sync failure should not break the rename
+    }
+  }
+
   // Return new relative path
+  invalidateTreeCache()
   return path.relative(getContentDir(), newResolved)
 }
 
@@ -362,6 +405,7 @@ export async function moveItem(
   await fs.rename(sourceResolved, newResolved)
 
   const newPath = path.relative(contentDir, newResolved)
+  invalidateTreeCache()
 
   // Migrate attachments for file moves (folder moves already carry assets/ via fs.rename)
   try {

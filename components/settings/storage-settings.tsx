@@ -117,25 +117,35 @@ const CATEGORY_META = [
 
 function StorageOverview() {
   const [analysis, setAnalysis] = useState<StorageAnalysis | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadStorage = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const res = await fetch('/api/attachments?action=storage')
-      if (res.ok) {
-        setAnalysis(await res.json())
-      }
-    } catch {
-      // silently fail — storage info is non-critical
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
+  // Fetch on mount and whenever the user manually refreshes (refreshKey bump).
+  // The fetch is inline + async so setState only runs after the await barrier.
   useEffect(() => {
-    loadStorage()
-  }, [loadStorage])
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/attachments?action=storage')
+        if (!cancelled && res.ok) {
+          setAnalysis(await res.json())
+        }
+      } catch {
+        // silently fail — storage info is non-critical
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [refreshKey])
+
+  const refreshStorage = useCallback(() => {
+    setIsLoading(true)
+    setRefreshKey((k) => k + 1)
+  }, [])
 
   if (isLoading && !analysis) {
     return (
@@ -161,7 +171,7 @@ function StorageOverview() {
           <h3 className="text-sm font-semibold text-[#1a1a1a]">空间使用</h3>
         </div>
         <button
-          onClick={loadStorage}
+          onClick={refreshStorage}
           disabled={isLoading}
           className={cn(
             buttonVariants({ variant: 'outline', size: 'xs' }),
@@ -225,7 +235,6 @@ function StorageOverview() {
           <div className="text-xs text-[#8a8a8a] mb-2">按文件夹</div>
           <div className="space-y-1.5">
             {analysis.folders.map((folder) => {
-              const folderPercent = pct(folder.size, total)
               return (
                 <div key={folder.path || '/'} className="group">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -270,35 +279,47 @@ function StorageOverview() {
 function StorageSection() {
   const [orphans, setOrphans] = useState<OrphanAttachment[]>([])
   const [totalSize, setTotalSize] = useState(0)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadOrphans = useCallback(async () => {
+  // Fetch on mount and whenever the user rescans (refreshKey bump).
+  // Inline + async so setState only runs after the await barrier.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/attachments?action=orphans')
+        if (cancelled) return
+        if (res.ok) {
+          const data = await res.json()
+          if (cancelled) return
+          setOrphans(data.orphans)
+          setTotalSize(data.totalSize)
+          setSelected(new Set())
+        } else {
+          setError('扫描失败')
+        }
+      } catch {
+        if (!cancelled) setError('扫描失败')
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [refreshKey])
+
+  // Manual rescan re-enters the loading state (initial mount starts loading via useState)
+  const refreshOrphans = useCallback(() => {
     setIsLoading(true)
     setError(null)
-    try {
-      const res = await fetch('/api/attachments?action=orphans')
-      if (res.ok) {
-        const data = await res.json()
-        setOrphans(data.orphans)
-        setTotalSize(data.totalSize)
-        setSelected(new Set())
-      } else {
-        setError('扫描失败')
-      }
-    } catch {
-      setError('扫描失败')
-    } finally {
-      setIsLoading(false)
-    }
+    setRefreshKey((k) => k + 1)
   }, [])
-
-  // Auto-load when component mounts
-  useEffect(() => {
-    loadOrphans()
-  }, [loadOrphans])
 
   const toggleSelect = useCallback((path: string) => {
     setSelected((prev) => {
@@ -333,7 +354,7 @@ function StorageSection() {
           setError(`${data.failed.length} 个文件删除失败`)
         }
         // Reload to refresh the list
-        await loadOrphans()
+        setRefreshKey((k) => k + 1)
       } else {
         setError('删除失败')
       }
@@ -342,7 +363,7 @@ function StorageSection() {
     } finally {
       setIsDeleting(false)
     }
-  }, [selected, loadOrphans])
+  }, [selected])
 
   return (
     <div>
@@ -364,7 +385,7 @@ function StorageSection() {
           </div>
         </div>
         <button
-          onClick={loadOrphans}
+          onClick={refreshOrphans}
           disabled={isLoading}
           className={cn(
             buttonVariants({ variant: 'outline', size: 'sm' }),

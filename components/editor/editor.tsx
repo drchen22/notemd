@@ -32,17 +32,22 @@ interface NoteEditorProps {
   onFrontmatterChange?: (fm: NoteFrontmatter) => void
   onToggleAI?: () => void
   showAI?: boolean
+  /** Called when a title edit causes the file to be renamed */
+  onActiveFilePathChange?: (newPath: string) => void
 }
 
 const DEBOUNCE_MS = 1500
 const DEFAULT_CONTENT = '<h1>Welcome to NoteMD</h1><p>Start writing, or open a file from the sidebar…</p>'
 const DEFAULT_INLINE_AI_STATE: InlineAIState = { isOpen: false, cursorPos: 0, coords: { top: 0, left: 0 } }
 
-export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFilePath, frontmatter, onFrontmatterChange, onToggleAI, showAI }: NoteEditorProps) {
+export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFilePath, frontmatter, onFrontmatterChange, onToggleAI, showAI, onActiveFilePathChange }: NoteEditorProps) {
   const lastLoadedRef = useRef<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isExternalUpdateRef = useRef(false)
   const lastSavedMarkdownRef = useRef<string | null>(null)
+  const lastRenameTitleRef = useRef<string | null>(null)
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<ReturnType<typeof useEditor>>(null)
@@ -108,8 +113,10 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
 
   const saveFile = useCallback(
     async (rawMarkdown: string) => {
-      if (!activeFilePath) return
-      const markdown = relativizeImagePaths(rawMarkdown, activeFilePath)
+      // Use ref (not closure) so rename-from-title can update path before calling save
+      const filePath = activeFilePathRef.current
+      if (!filePath) return
+      const markdown = relativizeImagePaths(rawMarkdown, filePath)
       if (markdown === lastSavedMarkdownRef.current) return
       setSaveStatus('saving')
       try {
@@ -117,7 +124,7 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            path: activeFilePath,
+            path: filePath,
             content: markdown,
             frontmatter: frontmatterRef.current ?? undefined,
           }),
@@ -125,7 +132,12 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
         if (res.ok) {
           lastSavedMarkdownRef.current = markdown
           setSaveStatus('saved')
-          setTimeout(() => setSaveStatus('idle'), 2000)
+          // Flip back to 'idle' after a beat — track it so we can cancel on unmount.
+          if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+          statusTimerRef.current = setTimeout(() => {
+            statusTimerRef.current = null
+            setSaveStatus('idle')
+          }, 2000)
         } else {
           setSaveStatus('unsaved')
         }
@@ -133,7 +145,9 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
         setSaveStatus('unsaved')
       }
     },
-    [activeFilePath]
+    // saveFile only reads refs (activeFilePathRef, frontmatterRef, lastSavedMarkdownRef)
+    // so it never goes stale — no closure deps needed.
+    [],
   )
 
   // Store function refs for use inside Tiptap callbacks (avoids stale closures)
@@ -224,26 +238,70 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
   // Keep editorRef in sync
   editorRef.current = editor
 
-  // Frontmatter change handler — triggers auto-save
+  // Frontmatter change handler — triggers auto-save and title rename
   const handleFrontmatterChange = useCallback((newFm: NoteFrontmatter) => {
     onFrontmatterChange?.(newFm)
-    // Trigger auto-save with current editor content
+
     const ed = editorRef.current
-    if (ed && activeFilePath) {
+    if (!ed || !activeFilePath) return
+
+    const newTitle = newFm.title?.trim()
+    const titleChanged = newTitle && newTitle !== lastRenameTitleRef.current
+
+    if (titleChanged) {
+      // Title changed → cancel both timers, do coordinated rename + save
+      lastRenameTitleRef.current = newTitle!
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
+      setSaveStatus('unsaved')
+
+      renameTimerRef.current = setTimeout(async () => {
+        try {
+          // 1. Rename the file first
+          const res = await fetch('/api/files', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'rename-from-title', path: activeFilePathRef.current, title: newTitle }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            // Sync actual title back (may differ if collision suffix was added)
+            if (data.actualTitle) {
+              lastRenameTitleRef.current = data.actualTitle
+              onFrontmatterChange?.({ ...frontmatterRef.current!, title: data.actualTitle })
+            }
+            if (data.newPath && data.newPath !== activeFilePathRef.current) {
+              onActiveFilePathChange?.(data.newPath)
+              // Update the ref so saveFile uses the new path
+              activeFilePathRef.current = data.newPath
+            }
+          }
+          // 2. Then save content to the (possibly renamed) path
+          saveFileRef.current(ed.getMarkdown())
+        } catch {
+          // Still try to save even if rename failed
+          saveFileRef.current(ed.getMarkdown())
+        }
+      }, DEBOUNCE_MS)
+    } else {
+      // Non-title frontmatter change → normal debounced save only
       setSaveStatus('unsaved')
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => {
         saveFileRef.current(ed.getMarkdown())
       }, DEBOUNCE_MS)
     }
-  }, [activeFilePath, onFrontmatterChange])
+  }, [activeFilePath, onFrontmatterChange, onActiveFilePathChange])
 
   // Load external markdown content
   useEffect(() => {
     if (!editor || !markdownContent || markdownContent === lastLoadedRef.current) return
     lastLoadedRef.current = markdownContent
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     lastSavedMarkdownRef.current = markdownContent
+    lastRenameTitleRef.current = frontmatterRef.current?.title?.trim() ?? null
     setSaveStatus('idle')
     isExternalUpdateRef.current = true
     const resolved = activeFilePath
@@ -252,10 +310,12 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
     editor.commands.setContent(resolved, { contentType: 'markdown' })
   }, [editor, markdownContent, activeFilePath])
 
-  // Cleanup timer on unmount
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     }
   }, [])
 

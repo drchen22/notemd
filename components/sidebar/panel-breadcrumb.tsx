@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, PanelLeftOpen, Plus, FileText, PenTool } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PanelLeftOpen, Plus, FileText, PenTool, FolderPlus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -16,6 +16,8 @@ interface PanelBreadcrumbProps {
   onNewNote: () => void
   /** Create a new excalidraw whiteboard in inbox */
   onNewExcalidraw?: () => void
+  /** Create a new folder in current directory */
+  onNewFolder?: () => void
   /** Whether the left panel is collapsed (show expand button) */
   leftCollapsed?: boolean
   /** Expand the left panel */
@@ -28,6 +30,7 @@ export function PanelBreadcrumb({
   onNavigate,
   onNewNote,
   onNewExcalidraw,
+  onNewFolder,
   leftCollapsed,
   onExpandLeft,
 }: PanelBreadcrumbProps) {
@@ -109,6 +112,15 @@ export function PanelBreadcrumb({
               <FileText className="size-3.5" strokeWidth={1.5} />
               New Note
             </button>
+            {onNewFolder && (
+              <button
+                onClick={() => { closeMenu(); onNewFolder() }}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors"
+              >
+                <FolderPlus className="size-3.5" strokeWidth={1.5} />
+                New Folder
+              </button>
+            )}
             {onNewExcalidraw && (
               <button
                 onClick={() => { closeMenu(); onNewExcalidraw() }}

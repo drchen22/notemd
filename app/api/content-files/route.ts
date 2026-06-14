@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 
 import { getContentDir } from '@/lib/content-dir'
+import { requireAuth } from '@/lib/auth'
 
 const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -14,6 +15,9 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 export async function GET(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
+
   const { searchParams } = new URL(request.url)
   const filePath = searchParams.get('path')
 

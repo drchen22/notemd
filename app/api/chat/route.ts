@@ -1,8 +1,11 @@
 import { createAgentUIStreamResponse } from 'ai'
 
 import { noteAgent } from '@/lib/agents/note-agent'
+import { requireAuth } from '@/lib/auth'
 
 export async function POST(req: Request) {
+  const denied = requireAuth(req)
+  if (denied) return denied
   try {
     const body = await req.json()
     const { messages, currentFilePath, currentFileContent, mode } = body as {

@@ -10,6 +10,8 @@ import {
   renameItem,
   moveItem,
 } from '@/lib/file-ops'
+import { titleToSlug, slugToTitle } from '@/lib/frontmatter'
+import { requireAuth } from '@/lib/auth'
 
 /** Classify an error and return an appropriate JSON error response */
 function classifyError(err: unknown, fallbackMessage: string) {
@@ -27,6 +29,9 @@ function classifyError(err: unknown, fallbackMessage: string) {
 }
 
 export async function GET(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
+
   const { searchParams } = new URL(request.url)
   const action = searchParams.get('action')
 
@@ -61,6 +66,8 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
   try {
     const body = await request.json()
     const { path: filePath, content, frontmatter } = body
@@ -92,6 +99,8 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
   try {
     const body = await request.json()
     const { action, path: itemPath, content } = body
@@ -125,6 +134,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
   try {
     const body = await request.json()
     const { action } = body
@@ -136,6 +147,50 @@ export async function PATCH(request: Request) {
       }
       const newPath = await renameItem(itemPath, newName)
       return NextResponse.json({ success: true, newPath })
+    }
+
+    if (action === 'rename-from-title') {
+      const { path: itemPath, title } = body
+      if (!itemPath || !title) {
+        return NextResponse.json({ error: 'Missing path or title' }, { status: 400 })
+      }
+      const slug = titleToSlug(title)
+      if (!slug) {
+        return NextResponse.json({ error: 'Invalid title' }, { status: 400 })
+      }
+      // Preserve extension
+      const ext = itemPath.endsWith('.excalidraw') ? '.excalidraw' : '.md'
+      const baseName = slug + ext
+      // No-op if name unchanged
+      const currentBasename = itemPath.split('/').pop() ?? itemPath
+      if (currentBasename === baseName) {
+        return NextResponse.json({ success: true, newPath: itemPath, actualTitle: title })
+      }
+      // Try renaming; on collision, auto-append suffix (-1, -2, …)
+      let newName = baseName
+      let newPath: string | undefined
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try {
+          // The editor writes the file (with its own title) right after, so
+          // skip the filename→title sync inside renameItem to avoid a double write.
+          newPath = await renameItem(itemPath, newName, { syncTitleToFilename: false })
+          break
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : ''
+          if (msg.includes('already exists')) {
+            newName = `${slug}-${attempt + 1}${ext}`
+            continue
+          }
+          throw err
+        }
+      }
+      if (!newPath) {
+        return NextResponse.json({ error: 'Could not find a unique name' }, { status: 409 })
+      }
+      // Derive the actual title from the final filename (may differ if suffix was added)
+      const finalSlug = newName.replace(ext, '')
+      const actualTitle = slugToTitle(finalSlug)
+      return NextResponse.json({ success: true, newPath, actualTitle })
     }
 
     if (action === 'move') {
@@ -154,6 +209,8 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
   try {
     const body = await request.json()
     const { path: itemPath } = body

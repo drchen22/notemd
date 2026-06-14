@@ -35,6 +35,8 @@ interface ContentsPanelProps {
   onNewNote: () => void
   /** Create a new excalidraw whiteboard in inbox */
   onNewExcalidraw?: () => void
+  /** Create a new folder in current directory */
+  onNewFolder?: () => void
   /** Whether the left panel is collapsed */
   leftCollapsed?: boolean
   /** Expand the left panel */
@@ -93,6 +95,7 @@ export function ContentsPanel({
   isLoading,
   onNewNote,
   onNewExcalidraw,
+  onNewFolder,
   leftCollapsed,
   onExpandLeft,
   folders,
@@ -155,13 +158,9 @@ export function ContentsPanel({
             node={node}
             isActive={activeFilePath === node.path}
             onSelect={onFileSelect}
-            onRequestRename={callbacks.onRequestRename}
             onRequestDelete={callbacks.onRequestDelete}
-            onRenameSubmit={callbacks.onRenameSubmit}
-            onRenameCancel={callbacks.onRenameCancel}
             onDeleteConfirm={callbacks.onDeleteConfirm}
             onDeleteCancel={callbacks.onDeleteCancel}
-            isRenaming={renamingPath === node.path}
             isDeleting={deletingPath === node.path}
             folders={folders}
             onMoveTo={onMoveTo}
@@ -181,6 +180,7 @@ export function ContentsPanel({
       onNavigate={onBreadcrumbClick}
       onNewNote={onNewNote}
       onNewExcalidraw={onNewExcalidraw}
+      onNewFolder={onNewFolder}
       leftCollapsed={leftCollapsed}
       onExpandLeft={onExpandLeft}
     />
@@ -191,6 +191,7 @@ export function ContentsPanel({
       onNavigate={() => {}}
       onNewNote={onNewNote}
       onNewExcalidraw={onNewExcalidraw}
+      onNewFolder={onNewFolder}
       leftCollapsed={leftCollapsed}
       onExpandLeft={onExpandLeft}
     />

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { FileText, FolderInput, Pencil, Trash2, Folder, Check, PenTool } from 'lucide-react'
+import { FileText, FolderInput, Trash2, Folder, Check, PenTool } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 
 import type { FileTreeNode } from '@/types/file-tree'
@@ -9,7 +9,6 @@ import type { FileTreeNode } from '@/types/file-tree'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { DeleteConfirmPopover } from './delete-confirm-popover'
-import { InlineRenameInput } from './inline-rename-input'
 import { type FolderOption } from './move-to-picker'
 
 /** Format a date string (YYYY-MM-DD) into a human-readable format */
@@ -38,13 +37,9 @@ interface NoteCardProps {
   node: FileTreeNode
   isActive: boolean
   onSelect: (path: string) => void
-  onRequestRename: (path: string) => void
   onRequestDelete: (path: string) => void
-  onRenameSubmit: (path: string, newName: string) => void
-  onRenameCancel: () => void
   onDeleteConfirm: (path: string) => void
   onDeleteCancel: () => void
-  isRenaming: boolean
   isDeleting: boolean
   folders: FolderOption[]
   onMoveTo: (sourcePath: string, targetDir: string) => void
@@ -54,13 +49,9 @@ export const NoteCard = memo(function NoteCard({
   node,
   isActive,
   onSelect,
-  onRequestRename,
   onRequestDelete,
-  onRenameSubmit,
-  onRenameCancel,
   onDeleteConfirm,
   onDeleteCancel,
-  isRenaming,
   isDeleting,
   folders,
   onMoveTo,
@@ -103,33 +94,23 @@ export const NoteCard = memo(function NoteCard({
             strokeWidth={1.5}
           />
         )}
-        {isRenaming ? (
-          <InlineRenameInput
-            initialName={stripExt(node.name)}
-            onSubmit={(newName) => onRenameSubmit(node.path, newName)}
-            onCancel={onRenameCancel}
-            depth={0}
-            className="!ml-0"
-          />
-        ) : (
-          <span
-            className={cn(
-              'text-[0.9375rem] flex-1 font-medium',
-              isActive ? 'text-[#1a1a1a]' : 'text-[#3a3a3a]',
-            )}
-          >
-            {title}
-          </span>
-        )}
+        <span
+          className={cn(
+            'text-[0.9375rem] flex-1 font-medium',
+            isActive ? 'text-[#1a1a1a]' : 'text-[#3a3a3a]',
+          )}
+        >
+          {title}
+        </span>
       </div>
 
-      {!isRenaming && preview && (
+      {preview && (
         <p className="text-[0.8125rem] text-[#6a6a6a] leading-relaxed line-clamp-2 pl-[27px] mb-2">
           {preview}
         </p>
       )}
 
-      {!isRenaming && formattedDate && (
+      {formattedDate && (
         <div className="flex items-center justify-between pl-[27px]">
           <span className="text-[0.75rem] text-[#8a8a8a]">{formattedDate}</span>
           <span className="text-[0.75rem] text-[#8a8a8a]">Created {formattedDate}</span>
@@ -156,10 +137,6 @@ export const NoteCard = memo(function NoteCard({
         )}
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => { onRequestRename(node.path) }}>
-          <Pencil className="size-3.5" strokeWidth={1.5} /> Rename
-        </ContextMenuItem>
-
         {/* Move to — hover submenu */}
         <ContextMenuPrimitive.SubmenuRoot>
           <ContextMenuPrimitive.SubmenuTrigger

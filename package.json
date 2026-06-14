@@ -3,10 +3,12 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "next dev",
+        "dev": "NODE_OPTIONS='--max-old-space-size=4096' next dev",
         "build": "next build",
         "start": "next start",
-        "lint": "eslint"
+        "lint": "eslint",
+        "test": "vitest run",
+        "test:watch": "vitest"
     },
     "dependencies": {
         "@ai-sdk/openai": "^3.0.68",
@@ -49,6 +51,7 @@
         "eslint": "^9.39.4",
         "eslint-config-next": "16.2.7",
         "tailwindcss": "^4.3.0",
-        "typescript": "^5.9.3"
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.8"
     }
 }

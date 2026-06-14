@@ -4,8 +4,11 @@ import path from 'path'
 import { randomUUID } from 'crypto'
 
 import { getContentDir } from '@/lib/content-dir'
+import { requireAuth } from '@/lib/auth'
 
 export async function POST(request: Request) {
+  const denied = requireAuth(request)
+  if (denied) return denied
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null

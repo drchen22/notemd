@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Excalidraw, THEME } from '@excalidraw/excalidraw'
-import type { ExcalidrawImperativeAPI, AppState, BinaryFiles, BinaryFileData } from '@excalidraw/excalidraw/types'
+import type { ExcalidrawImperativeAPI, BinaryFiles, BinaryFileData } from '@excalidraw/excalidraw/types'
 
 type ExcalidrawElement = import('@excalidraw/excalidraw/element/types').ExcalidrawElement
 
@@ -121,14 +121,23 @@ export default function ExcalidrawEditor({
   // Track file references from the loaded file to avoid re-uploading existing images
   const loadedFileRefsRef = useRef<Record<string, string> | null>(null)
 
-  // Keep refs in sync
-  filePathRef.current = activeFilePath
-  onStatusChangeRef.current = onStatusChange
+  // Reset loaded scene when the file changes — derived during render (avoids
+  // setState-in-effect) per the React "adjusting state when a prop changes" pattern.
+  const [prevPath, setPrevPath] = useState(activeFilePath)
+  if (activeFilePath !== prevPath) {
+    setPrevPath(activeFilePath)
+    setLoadedInitialData(null)
+  }
+
+  // Keep refs in sync (latest-prop pattern) — mutated in an effect, not during render
+  useEffect(() => {
+    filePathRef.current = activeFilePath
+    onStatusChangeRef.current = onStatusChange
+  })
 
   // Load scene data asynchronously — handles both new fileReferences and legacy embedded files
   useEffect(() => {
     if (!sceneContent || !activeFilePath) {
-      setLoadedInitialData(null)
       loadedFileRefsRef.current = null
       return
     }
@@ -254,7 +263,9 @@ export default function ExcalidrawEditor({
   }, [excalidrawAPI, setStatus])
 
   const saveFileRef = useRef(saveFile)
-  saveFileRef.current = saveFile
+  useEffect(() => {
+    saveFileRef.current = saveFile
+  }, [saveFile])
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -264,7 +275,7 @@ export default function ExcalidrawEditor({
   }, [])
 
   const handleChange = useCallback(
-    (elements: readonly ExcalidrawElement[], _appState: AppState, _files: BinaryFiles) => {
+    (elements: readonly ExcalidrawElement[]) => {
       if (isLoadingSceneRef.current) return
 
       // Only trigger save when elements actually changed (not on scroll/zoom/selection)

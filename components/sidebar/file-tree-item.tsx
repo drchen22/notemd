@@ -267,17 +267,7 @@ export const FileTreeItem = memo(function FileTreeItem({
           strokeWidth={1.5}
         />
       )}
-      {isRenaming ? (
-        <InlineRenameInput
-          initialName={node.name}
-          onSubmit={(newName) => onRenameSubmit(node.path, newName)}
-          onCancel={onRenameCancel}
-          depth={0}
-          className="!ml-0"
-        />
-      ) : (
-        <span className="truncate">{node.name.replace(/\.(md|excalidraw)$/, '')}</span>
-      )}
+      <span className="truncate">{node.name.replace(/\.(md|excalidraw)$/, '')}</span>
     </button>
   )
 
@@ -300,9 +290,6 @@ export const FileTreeItem = memo(function FileTreeItem({
           )}
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => { onRequestRename(node.path) }}>
-            <Pencil className="size-3.5" strokeWidth={1.5} /> Rename
-          </ContextMenuItem>
           {moveToSubmenu}
           <ContextMenuSeparator />
           <ContextMenuItem

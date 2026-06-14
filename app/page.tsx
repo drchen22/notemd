@@ -64,6 +64,7 @@ export default function Home() {
     }
   }, [])
 
+  // Used by sidebar operations (move, delete) — sidebar handles its own tree refresh
   const handleActiveFilePathChange = useCallback((newPath: string | null) => {
     startTransition(() => {
       setActiveFilePath(newPath)
@@ -71,6 +72,14 @@ export default function Home() {
         setMarkdownContent(null)
         setActiveFileFrontmatter(null)
       }
+    })
+  }, [])
+
+  // Used by editor title rename — needs tree refresh since sidebar doesn't know about it
+  const handleEditorPathChange = useCallback((newPath: string) => {
+    startTransition(() => {
+      setActiveFilePath(newPath)
+      setTreeRefreshKey((k) => k + 1)
     })
   }, [])
 
@@ -144,6 +153,7 @@ export default function Home() {
             onFrontmatterChange={handleFrontmatterChange}
             onToggleAI={handleToggleAI}
             showAI={showAI}
+            onActiveFilePathChange={handleEditorPathChange}
           />
         )}
       </div>
