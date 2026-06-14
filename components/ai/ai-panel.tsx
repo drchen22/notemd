@@ -4,20 +4,15 @@ import { useRef, useEffect, useState, useCallback, type FormEvent } from 'react'
 import { useChat } from '@ai-sdk/react'
 
 import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
+import { useDocument } from '@/lib/context/document-context'
+import { useLayout } from '@/lib/context/layout-context'
 import { ChatInput } from './chat-input'
 import { ChatMessages } from './chat-messages'
 import { EmptyState } from './empty-state'
 
-interface AIPanelProps {
-  currentFilePath: string | null
-  currentFileContent: string | null
-  /** Called when the AI writes or edits a file via tools */
-  onFileChanged?: (filePath: string) => void
-  /** Panel width in pixels (controlled by parent resize handle) */
-  width?: number
-}
-
-export function AIPanel({ currentFilePath, currentFileContent, onFileChanged, width }: AIPanelProps) {
+export function AIPanel() {
+  const { activeFilePath: currentFilePath, markdownContent: currentFileContent, notifyFileChanged: onFileChanged } = useDocument()
+  const { aiWidth: width } = useLayout()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
   const notifiedToolCalls = useRef(new Set<string>())

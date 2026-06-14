@@ -2,24 +2,22 @@
 
 import { useEffect, useReducer, useRef, useState, useCallback, useMemo } from 'react'
 import { MessageSquare } from 'lucide-react'
+import { toast } from 'sonner'
 import { SettingsDialog } from '@/components/settings/storage-settings'
 
 import type { FileTreeNode } from '@/types/file-tree'
+
+import { useDocument } from '@/lib/context/document-context'
+import { useLayout } from '@/lib/context/layout-context'
+import { useCategory } from '@/lib/context/category-context'
 
 import { CategoryPanel } from './category-panel'
 import { ContentsPanel } from './contents-panel'
 import { type FolderOption } from './move-to-picker'
 
 interface TwoPanelSidebarProps {
-  activeFilePath: string | null
-  onFileSelect: (path: string) => void
-  refreshKey?: number
-  onOpenFullChat?: () => void
   /** Preload the full-page chat bundle on hover */
   onPreloadFullChat?: () => void
-  onActiveFilePathChange?: (newPath: string | null) => void
-  selectedCategory: string | null
-  onSelectedCategoryChange: (categoryPath: string | null) => void
 }
 
 /* ── Operation state reducer ── */
@@ -81,15 +79,13 @@ function flattenFolders(nodes: FileTreeNode[], depth = 0): FolderOption[] {
 /* ── Component ── */
 
 export function TwoPanelSidebar({
-  activeFilePath,
-  onFileSelect,
-  refreshKey,
-  onOpenFullChat,
   onPreloadFullChat,
-  onActiveFilePathChange,
-  selectedCategory,
-  onSelectedCategoryChange,
 }: TwoPanelSidebarProps) {
+  // State from contexts (replaces 6 props)
+  const { activeFilePath, treeRefreshKey, selectFile, changeActivePath } = useDocument()
+  const { openFullChat } = useLayout()
+  const { selectedCategory, setSelectedCategory: onSelectedCategoryChange } = useCategory()
+
   const [tree, setTree] = useState<FileTreeNode[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -112,7 +108,7 @@ export function TwoPanelSidebar({
   const handleLeftCollapse = useCallback(() => setLeftCollapsed(true), [])
   const handleLeftExpand = useCallback(() => setLeftCollapsed(false), [])
 
-  const effectiveRefreshKey = (refreshKey ?? 0) + internalRefreshKey
+  const effectiveRefreshKey = treeRefreshKey + internalRefreshKey
 
   // Fetch tree data
   useEffect(() => {
@@ -123,9 +119,15 @@ export function TwoPanelSidebar({
         if (!cancelled && res.ok) {
           const data = await res.json()
           setTree(data.tree)
+        } else if (!cancelled) {
+          console.error('[sidebar] tree load failed: HTTP', res.status)
+          toast.error('加载文件列表失败')
         }
-      } catch {
-        // Silently fail
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[sidebar] tree load failed:', err)
+          toast.error('加载文件列表失败')
+        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -195,23 +197,27 @@ export function TwoPanelSidebar({
     async (itemPath: string, newName: string) => {
       dispatchOperation({ type: 'clear' })
       try {
-        const res = await fetch('/api/files', {
-          method: 'PATCH',
+        const res = await fetch('/api/files/rename', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'rename', path: itemPath, newName }),
         })
         if (res.ok) {
           const data = await res.json()
           refreshTree()
-          if (activeFilePath === itemPath && onActiveFilePathChange) {
-            onActiveFilePathChange(data.newPath)
+          if (activeFilePath === itemPath) {
+            changeActivePath(data.newPath)
           }
+        } else {
+          const data = await res.json().catch(() => null)
+          toast.error('重命名失败', { description: data?.error })
         }
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.error('[sidebar] rename failed:', err)
+        toast.error('重命名失败')
       }
     },
-    [activeFilePath, onActiveFilePathChange, refreshTree],
+    [activeFilePath, changeActivePath, refreshTree],
   )
 
   const handleDeleteConfirm = useCallback(
@@ -225,19 +231,23 @@ export function TwoPanelSidebar({
         })
         if (res.ok) {
           refreshTree()
-          if (activeFilePath === itemPath && onActiveFilePathChange) {
-            onActiveFilePathChange(null)
+          if (activeFilePath === itemPath) {
+            changeActivePath(null)
           }
           if (itemPath === selectedCategory) {
             onSelectedCategoryChange(null)
             setNavigationStack([])
           }
+        } else {
+          const data = await res.json().catch(() => null)
+          toast.error('删除失败', { description: data?.error })
         }
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.error('[sidebar] delete failed:', err)
+        toast.error('删除失败')
       }
     },
-    [activeFilePath, onActiveFilePathChange, refreshTree, selectedCategory, onSelectedCategoryChange],
+    [activeFilePath, changeActivePath, refreshTree, selectedCategory, onSelectedCategoryChange],
   )
 
   const handleCreate = useCallback(
@@ -257,38 +267,46 @@ export function TwoPanelSidebar({
         if (res.ok) {
           refreshTree()
           if (type === 'file') {
-            onFileSelect(fullPath.endsWith('.md') ? fullPath : fullPath + '.md')
+            selectFile(fullPath.endsWith('.md') ? fullPath : fullPath + '.md')
           } else if (type === 'excalidraw') {
-            onFileSelect(fullPath.endsWith('.excalidraw') ? fullPath : fullPath + '.excalidraw')
+            selectFile(fullPath.endsWith('.excalidraw') ? fullPath : fullPath + '.excalidraw')
           }
+        } else {
+          const data = await res.json().catch(() => null)
+          toast.error('创建失败', { description: data?.error })
         }
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.error('[sidebar] create failed:', err)
+        toast.error('创建失败')
       }
     },
-    [onFileSelect, refreshTree],
+    [selectFile, refreshTree],
   )
 
   const handleMoveTo = useCallback(
     async (sourcePath: string, targetDir: string) => {
       try {
-        const res = await fetch('/api/files', {
-          method: 'PATCH',
+        const res = await fetch('/api/files/move', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'move', sourcePath, targetDir }),
         })
         if (res.ok) {
           const data = await res.json()
           refreshTree()
-          if (activeFilePath === sourcePath && onActiveFilePathChange) {
-            onActiveFilePathChange(data.newPath)
+          if (activeFilePath === sourcePath) {
+            changeActivePath(data.newPath)
           }
+        } else {
+          const data = await res.json().catch(() => null)
+          toast.error('移动失败', { description: data?.error })
         }
-      } catch {
-        // Silently fail
+      } catch (err) {
+        console.error('[sidebar] move failed:', err)
+        toast.error('移动失败')
       }
     },
-    [activeFilePath, onActiveFilePathChange, refreshTree],
+    [activeFilePath, changeActivePath, refreshTree],
   )
 
   // --- Callbacks passed to tree items (stable via useMemo) ---
@@ -341,12 +359,16 @@ export function TwoPanelSidebar({
         refreshTree()
         onSelectedCategoryChange('inbox')
         setNavigationStack([])
-        onFileSelect(fullPath)
+        selectFile(fullPath)
+      } else {
+        const data = await res.json().catch(() => null)
+        toast.error('创建笔记失败', { description: data?.error })
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('[sidebar] new note failed:', err)
+      toast.error('创建笔记失败')
     }
-  }, [tree, refreshTree, onSelectedCategoryChange, onFileSelect])
+  }, [tree, refreshTree, onSelectedCategoryChange, selectFile])
 
   // --- New excalidraw: directly create in inbox with auto-generated name ---
   const handleNewExcalidraw = useCallback(async () => {
@@ -378,12 +400,16 @@ export function TwoPanelSidebar({
         refreshTree()
         onSelectedCategoryChange('inbox')
         setNavigationStack([])
-        onFileSelect(fullPath)
+        selectFile(fullPath)
+      } else {
+        const data = await res.json().catch(() => null)
+        toast.error('创建白板失败', { description: data?.error })
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      console.error('[sidebar] new excalidraw failed:', err)
+      toast.error('创建白板失败')
     }
-  }, [tree, refreshTree, onSelectedCategoryChange, onFileSelect])
+  }, [tree, refreshTree, onSelectedCategoryChange, selectFile])
 
   return (
     <aside className="relative flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-[#e8e6e3] bg-[#F8F6F3]">
@@ -421,7 +447,7 @@ export function TwoPanelSidebar({
           onNavigateInto={handleNavigateInto}
           onBreadcrumbClick={handleBreadcrumbClick}
           activeFilePath={activeFilePath}
-          onFileSelect={onFileSelect}
+          onFileSelect={selectFile}
           callbacks={callbacks}
           renamingPath={renamingPath}
           deletingPath={deletingPath}
@@ -444,17 +470,15 @@ export function TwoPanelSidebar({
 
       {/* Footer: Chat + Settings */}
       <div className="border-t border-[#e8e6e3] px-3 py-2.5 space-y-0.5">
-        {onOpenFullChat ? (
-          <button
-            onClick={onOpenFullChat}
-            onMouseEnter={onPreloadFullChat}
-            onFocus={onPreloadFullChat}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[0.875rem] text-[#4a4a4a]/60 transition-colors hover:bg-black/[0.04] hover:text-[#1a1a1a]"
-          >
-            <MessageSquare className="size-[15px] shrink-0" strokeWidth={1.5} />
-            <span>新对话</span>
-          </button>
-        ) : null}
+        <button
+          onClick={openFullChat}
+          onMouseEnter={onPreloadFullChat}
+          onFocus={onPreloadFullChat}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[0.875rem] text-[#4a4a4a]/60 transition-colors hover:bg-black/[0.04] hover:text-[#1a1a1a]"
+        >
+          <MessageSquare className="size-[15px] shrink-0" strokeWidth={1.5} />
+          <span>新对话</span>
+        </button>
         <SettingsDialog />
       </div>
     </aside>

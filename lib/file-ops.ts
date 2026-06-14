@@ -13,6 +13,7 @@ import {
 
 import { getContentDir } from '@/lib/content-dir'
 import { migrateAttachments } from '@/lib/attachment-mover'
+import { ForbiddenError, NotFoundError, ConflictError, ValidationError } from '@/lib/errors'
 
 const ALLOWED_EXTENSIONS = ['.md', '.excalidraw']
 
@@ -29,10 +30,10 @@ function resolveSafePath(filePath: string) {
     !resolved.startsWith(contentDir + path.sep) &&
     resolved !== contentDir
   ) {
-    throw new Error('Forbidden: path traversal detected')
+    throw new ForbiddenError('PATH_TRAVERSAL', 'Forbidden: path traversal detected')
   }
   if (!isAllowedFile(resolved)) {
-    throw new Error('Forbidden: only .md and .excalidraw files are allowed')
+    throw new ForbiddenError('INVALID_EXTENSION', 'Forbidden: only .md and .excalidraw files are allowed')
   }
   return resolved
 }
@@ -45,17 +46,17 @@ function resolveSafePathForItem(itemPath: string) {
     !resolved.startsWith(contentDir + path.sep) &&
     resolved !== contentDir
   ) {
-    throw new Error('Forbidden: path traversal detected')
+    throw new ForbiddenError('PATH_TRAVERSAL', 'Forbidden: path traversal detected')
   }
   return resolved
 }
 
 /** Validate a file/folder name (no path separators, no hidden files) */
 function validateName(name: string) {
-  if (!name || !name.trim()) throw new Error('Name cannot be empty')
-  if (name.includes('/') || name.includes('\\')) throw new Error('Name cannot contain path separators')
-  if (name.includes('..')) throw new Error('Name cannot contain ".."')
-  if (name.startsWith('.')) throw new Error('Name cannot start with "."')
+  if (!name || !name.trim()) throw new ValidationError('NAME_EMPTY', 'Name cannot be empty')
+  if (name.includes('/') || name.includes('\\')) throw new ValidationError('NAME_SEPARATORS', 'Name cannot contain path separators')
+  if (name.includes('..')) throw new ValidationError('NAME_DOTDOT', 'Name cannot contain ".."')
+  if (name.startsWith('.')) throw new ValidationError('NAME_HIDDEN', 'Name cannot start with "."')
 }
 
 /** Result of reading a file with frontmatter parsed separately */
@@ -199,6 +200,11 @@ export async function writeFile(
  * Operates on the full raw file (including frontmatter), so frontmatter is preserved.
  * Returns the number of replacements made.
  * Throws if oldText is not found or appears more than once (ambiguous).
+ *
+ * NOTE: This is a read-modify-write sequence with no lock — two concurrent
+ * edits to the same file can lose one update. Acceptable for a single-user
+ * local editor (the only caller is the AI tool loop, which is sequential);
+ * adding a file lock would be over-engineering here.
  */
 export async function editFile(
   filePath: string,
@@ -210,13 +216,15 @@ export async function editFile(
 
   const count = content.split(oldText).length - 1
   if (count === 0) {
-    throw new Error(
-      `oldText not found in ${filePath}. Use readFile first to see the current content.`
+    throw new NotFoundError(
+      'OLDTEXT_NOT_FOUND',
+      `oldText not found in ${filePath}. Use readFile first to see the current content.`,
     )
   }
   if (count > 1) {
-    throw new Error(
-      `oldText appears ${count} times in ${filePath}. Provide more surrounding context to make it unique.`
+    throw new ValidationError(
+      'OLDTEXT_AMBIGUOUS',
+      `oldText appears ${count} times in ${filePath}. Provide more surrounding context to make it unique.`,
     )
   }
 
@@ -255,14 +263,18 @@ export async function createFile(
     await fs.writeFile(resolved, fullContent, { encoding: 'utf-8', flag: 'wx' })
   } catch (err: unknown) {
     if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'EEXIST') {
-      throw new Error('File already exists')
+      throw new ConflictError('FILE_EXISTS', 'File already exists')
     }
     throw err
   }
   invalidateTreeCache()
 }
 
-/** Create a new directory */
+/** Create a new directory.
+ *  NOTE: uses recursive:true to support nested paths (sidebar creates folders
+ *  at arbitrary depth). The pre-existence check has a small TOCTOU window,
+ *  acceptable for a single-user local editor; a race here at worst makes the
+ *  "already exists" guard miss, not corrupt data. */
 export async function createFolder(folderPath: string): Promise<void> {
   validateName(path.basename(folderPath))
   const resolved = resolveSafePathForItem(folderPath)
@@ -270,9 +282,9 @@ export async function createFolder(folderPath: string): Promise<void> {
   // Check if already exists
   try {
     await fs.access(resolved)
-    throw new Error('Folder already exists')
+    throw new ConflictError('FOLDER_EXISTS', 'Folder already exists')
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === 'Folder already exists') throw err
+    if (err instanceof ConflictError) throw err
     // Doesn't exist — proceed
   }
 
@@ -280,22 +292,26 @@ export async function createFolder(folderPath: string): Promise<void> {
   invalidateTreeCache()
 }
 
-/** Delete a file or folder (recursive) */
+/** Delete a file or folder (recursive). No access-then-rm TOCTOU window. */
 export async function deleteItem(itemPath: string): Promise<void> {
   const resolved = resolveSafePathForItem(itemPath)
 
-  // Check existence
+  // rm with force:false so a missing item surfaces as ENOENT (not silently ignored).
   try {
-    await fs.access(resolved)
-  } catch {
-    throw new Error('Item not found')
+    await fs.rm(resolved, { recursive: true, force: false })
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new NotFoundError('ITEM_NOT_FOUND', 'Item not found')
+    }
+    throw err
   }
-
-  await fs.rm(resolved, { recursive: true, force: true })
   invalidateTreeCache()
 }
 
-/** Rename a file or folder. Returns the new relative path. */
+/** Rename a file or folder. Returns the new relative path.
+ *  The target-existence check is a functional guard (POSIX rename overwrites
+ *  files), kept as an explicit check. Source-existence is detected via the
+ *  rename's own ENOENT rather than a separate access preflight. */
 export async function renameItem(
   itemPath: string,
   newName: string,
@@ -305,13 +321,6 @@ export async function renameItem(
   validateName(newName)
 
   const oldResolved = resolveSafePathForItem(itemPath)
-
-  // Check source exists
-  try {
-    await fs.access(oldResolved)
-  } catch {
-    throw new Error('Item not found')
-  }
 
   // Build new path at the same parent level
   const parentDir = path.dirname(oldResolved)
@@ -323,16 +332,24 @@ export async function renameItem(
 
   const newResolved = path.join(parentDir, finalName)
 
-  // Check target doesn't exist
+  // Check target doesn't exist (functional guard: rename would overwrite a file)
   try {
     await fs.access(newResolved)
-    throw new Error('An item with this name already exists')
+    throw new ConflictError('TARGET_EXISTS', 'An item with this name already exists')
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === 'An item with this name already exists') throw err
+    if (err instanceof ConflictError) throw err
     // Doesn't exist — proceed
   }
 
-  await fs.rename(oldResolved, newResolved)
+  // rename — ENOENT here means the source vanished between call and now.
+  try {
+    await fs.rename(oldResolved, newResolved)
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new NotFoundError('ITEM_NOT_FOUND', 'Item not found')
+    }
+    throw err
+  }
 
   // For .md files, sync the frontmatter title with the new filename.
   // Skipped for title-driven renames (rename-from-title), where the editor
@@ -355,7 +372,9 @@ export async function renameItem(
   return path.relative(getContentDir(), newResolved)
 }
 
-/** Move a file or folder into a target directory. Returns the new relative path. */
+/** Move a file or folder into a target directory. Returns the new relative path.
+ *  Source-existence is detected via the rename's own ENOENT; target-dir and
+ *  target-path existence are functional guards (must be a dir, must not exist). */
 export async function moveItem(
   sourcePath: string,
   targetDir: string
@@ -366,43 +385,44 @@ export async function moveItem(
     ? resolveSafePathForItem(targetDir)
     : contentDir
 
-  // Check source exists
-  try {
-    await fs.access(sourceResolved)
-  } catch {
-    throw new Error('Source not found')
-  }
-
-  // Check target dir exists
+  // Check target dir exists and is a directory (functional guard)
   try {
     const stat = await fs.stat(targetDirResolved)
-    if (!stat.isDirectory()) throw new Error('Target is not a directory')
+    if (!stat.isDirectory()) throw new ValidationError('TARGET_NOT_DIR', 'Target is not a directory')
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === 'Target is not a directory') throw err
-    throw new Error('Target directory not found')
+    if (err instanceof ValidationError) throw err
+    throw new NotFoundError('TARGET_NOT_FOUND', 'Target directory not found')
   }
 
   // Prevent moving into self or descendant
   if (targetDirResolved.startsWith(sourceResolved + path.sep)) {
-    throw new Error('Cannot move an item into its own descendant')
+    throw new ConflictError('MOVE_INTO_DESCENDANT', 'Cannot move an item into its own descendant')
   }
   if (targetDirResolved === sourceResolved) {
-    throw new Error('Cannot move an item into itself')
+    throw new ConflictError('MOVE_INTO_SELF', 'Cannot move an item into itself')
   }
 
   const itemName = path.basename(sourceResolved)
   const newResolved = path.join(targetDirResolved, itemName)
 
-  // Check target doesn't exist
+  // Check target path doesn't exist (functional guard: rename would overwrite)
   try {
     await fs.access(newResolved)
-    throw new Error('An item with this name already exists in the target folder')
+    throw new ConflictError('TARGET_EXISTS', 'An item with this name already exists in the target folder')
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === 'An item with this name already exists in the target folder') throw err
+    if (err instanceof ConflictError) throw err
     // Doesn't exist — proceed
   }
 
-  await fs.rename(sourceResolved, newResolved)
+  // rename — ENOENT means the source vanished between call and now.
+  try {
+    await fs.rename(sourceResolved, newResolved)
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new NotFoundError('SOURCE_NOT_FOUND', 'Source not found')
+    }
+    throw err
+  }
 
   const newPath = path.relative(contentDir, newResolved)
   invalidateTreeCache()

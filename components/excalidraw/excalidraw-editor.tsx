@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Excalidraw, THEME } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI, BinaryFiles, BinaryFileData } from '@excalidraw/excalidraw/types'
+import { toast } from 'sonner'
+
+import { useDocument } from '@/lib/context/document-context'
 
 type ExcalidrawElement = import('@excalidraw/excalidraw/element/types').ExcalidrawElement
 
 import '@excalidraw/excalidraw/index.css'
 
-type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved'
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 
 /** Lightweight fingerprint from elements to detect actual content changes. */
 function elementsFingerprint(elements: readonly ExcalidrawElement[]): string {
@@ -92,20 +95,10 @@ async function loadFileReferences(
 
 const DEBOUNCE_MS = 1500
 
-interface ExcalidrawEditorProps {
-  /** Raw JSON string of the .excalidraw file */
-  sceneContent?: string | null
-  /** Current file path (e.g. "project/diagram.excalidraw") */
-  activeFilePath?: string | null
-  /** Callback when save status changes */
-  onStatusChange?: (status: SaveStatus) => void
-}
+export default function ExcalidrawEditor() {
+  // Document state from context (replaces props)
+  const { activeFilePath, markdownContent: sceneContent } = useDocument()
 
-export default function ExcalidrawEditor({
-  sceneContent,
-  activeFilePath,
-  onStatusChange,
-}: ExcalidrawEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null)
   const [loadedInitialData, setLoadedInitialData] = useState<{
     elements: ExcalidrawElement[]
@@ -116,7 +109,6 @@ export default function ExcalidrawEditor({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedFingerprintRef = useRef<string | null>(null)
   const filePathRef = useRef(activeFilePath)
-  const onStatusChangeRef = useRef(onStatusChange)
   const isLoadingSceneRef = useRef(false)
   // Track file references from the loaded file to avoid re-uploading existing images
   const loadedFileRefsRef = useRef<Record<string, string> | null>(null)
@@ -129,10 +121,9 @@ export default function ExcalidrawEditor({
     setLoadedInitialData(null)
   }
 
-  // Keep refs in sync (latest-prop pattern) — mutated in an effect, not during render
+  // Keep ref in sync (latest-prop pattern) — mutated in an effect, not during render
   useEffect(() => {
     filePathRef.current = activeFilePath
-    onStatusChangeRef.current = onStatusChange
   })
 
   // Load scene data asynchronously — handles both new fileReferences and legacy embedded files
@@ -173,8 +164,12 @@ export default function ExcalidrawEditor({
             scrollToContent: true,
           })
         }
-      } catch {
-        if (!cancelled) setLoadedInitialData(null)
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[excalidraw] load scene failed:', err)
+          toast.error('白板加载失败')
+          setLoadedInitialData(null)
+        }
       }
     }
     load()
@@ -182,9 +177,9 @@ export default function ExcalidrawEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilePath]) // re-run when file changes (component remounts via key)
 
-  const setStatus = useCallback((status: SaveStatus) => {
-    onStatusChangeRef.current?.(status)
-  }, [])
+  // setStatus is a no-op now (onStatusChange prop was removed); kept as a
+  // placeholder for future UI that surfaces save status inside this component.
+  const setStatus = useCallback((status: SaveStatus) => { void status }, [])
 
   /** Serialize and save the scene to the server */
   const saveFile = useCallback(async () => {
@@ -255,10 +250,14 @@ export default function ExcalidrawEditor({
         setStatus('saved')
         setTimeout(() => setStatus('idle'), 2000)
       } else {
-        setStatus('idle')
+        console.error('[excalidraw] save failed: HTTP', res.status)
+        setStatus('error')
+        toast.error('白板保存失败')
       }
-    } catch {
-      setStatus('idle')
+    } catch (err) {
+      console.error('[excalidraw] save failed:', err)
+      setStatus('error')
+      toast.error('白板保存失败')
     }
   }, [excalidrawAPI, setStatus])
 

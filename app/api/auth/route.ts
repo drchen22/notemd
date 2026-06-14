@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { SESSION_COOKIE, sessionToken, verifyPassword } from "@/lib/auth";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SEC, issueSessionToken, verifyPassword } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -11,12 +11,12 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ success: true });
-  response.cookies.set(SESSION_COOKIE, sessionToken(), {
+  response.cookies.set(SESSION_COOKIE, issueSessionToken(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: SESSION_MAX_AGE_SEC,
   });
 
   return response;

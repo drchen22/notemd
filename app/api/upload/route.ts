@@ -40,7 +40,8 @@ export async function POST(request: Request) {
 
     // Return relative path (relative to the markdown file)
     return NextResponse.json({ path: `assets/${filename}` })
-  } catch {
+  } catch (err) {
+    console.error('[upload]', err)
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 }

@@ -1,8 +1,15 @@
-import { createHash, timingSafeEqual } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { NextResponse } from 'next/server'
 
 /** Cookie name holding the session token. */
 export const SESSION_COOKIE = 'session'
+
+/**
+ * Session lifetime in seconds. Tokens older than this are rejected.
+ * (Was 30 days as a plain cookie maxAge; now enforced inside the token too,
+ * so changing AUTH_SECRET or waiting past this window invalidates sessions.)
+ */
+export const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60 // 7 days
 
 /**
  * Read ACCESS_PASSWORD / AUTH_SECRET from the environment.
@@ -20,15 +27,74 @@ function getAuthConfig() {
   return { password, secret }
 }
 
-/** Derive the expected session token from the configured password + secret. Cached after first use. */
-let cachedToken: string | null = null
-export function sessionToken(): string {
-  if (cachedToken !== null) return cachedToken
-  const { password, secret } = getAuthConfig()
-  cachedToken = createHash('sha256')
-    .update(`${password}${secret}`)
-    .digest('hex')
-  return cachedToken
+// ── HMAC signing helpers ───────────────────────────────────────────────
+
+/** Base64url-encode a Buffer (no padding), safe inside a cookie value. */
+function b64url(buf: Buffer): string {
+  return buf.toString('base64url')
+}
+
+/** Derive the HMAC key from the configured secret. */
+function hmacKey(): Buffer {
+  // Include the password in the key so changing the password also invalidates
+  // all outstanding tokens (not just the secret).
+  const { secret, password } = getAuthConfig()
+  return Buffer.from(`${secret}:${password}`)
+}
+
+/** Compute the HMAC tag for a given payload string. */
+function sign(payload: string): Buffer {
+  return createHmac('sha256', hmacKey()).update(payload).digest()
+}
+
+/**
+ * Issue a signed session token embedding the issue time.
+ *
+ * Format: `<base64url(payload)>.<base64url(hmac)>`
+ * where payload is `JSON.stringify({ iat })`.
+ *
+ * Stateless: there is no server-side session record. Revocation happens by:
+ *   - natural expiry (iat older than SESSION_MAX_AGE_SEC), or
+ *   - changing AUTH_SECRET / ACCESS_PASSWORD (HMAC verification fails).
+ */
+export function issueSessionToken(): string {
+  const iat = Math.floor(Date.now() / 1000)
+  const payload = b64url(Buffer.from(JSON.stringify({ iat })))
+  const tag = b64url(sign(payload))
+  return `${payload}.${tag}`
+}
+
+/**
+ * Verify a session token: HMAC must be valid AND the token must not be older
+ * than SESSION_MAX_AGE_SEC. Returns true on a valid, unexpired token.
+ */
+export function verifySessionToken(token: string): boolean {
+  const dot = token.lastIndexOf('.')
+  if (dot <= 0 || dot === token.length - 1) return false
+  const payload = token.slice(0, dot)
+  const tag = token.slice(dot + 1)
+
+  let expectedTag: Buffer
+  try {
+    expectedTag = sign(payload)
+  } catch {
+    // getAuthConfig threw — env not configured
+    return false
+  }
+
+  // Constant-time comparison of the HMAC tags.
+  const given = Buffer.from(tag, 'base64url')
+  if (given.length !== expectedTag.length) return false
+  if (!timingSafeEqual(given, expectedTag)) return false
+
+  // Check expiry.
+  try {
+    const { iat } = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { iat: number }
+    const age = Math.floor(Date.now() / 1000) - iat
+    return age >= 0 && age < SESSION_MAX_AGE_SEC
+  } catch {
+    return false
+  }
 }
 
 /** Constant-time string comparison that tolerates unequal lengths. */
@@ -59,15 +125,11 @@ export function readSessionToken(cookieHeader: string | null): string | undefine
   return undefined
 }
 
-/** True if the request's session cookie matches the configured token. */
+/** True if the request's session cookie is a valid, unexpired token. */
 export function isAuthenticated(cookieHeader: string | null): boolean {
   const token = readSessionToken(cookieHeader)
   if (!token) return false
-  try {
-    return safeEqual(token, sessionToken())
-  } catch {
-    return false
-  }
+  return verifySessionToken(token)
 }
 
 /**

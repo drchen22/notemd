@@ -39,4 +39,16 @@ A web-based markdown editor with AI features, inspired by Typora.
 pnpm dev       # Start dev server
 pnpm build     # Production build
 pnpm lint      # Run ESLint
+pnpm test      # Run unit tests (Vitest)
 ```
+
+## Environment Variables
+
+All in `.env.local` (see `.env.local` for the full list with examples):
+
+- `CONTENT_DIR` — where notes are stored (default: `./content`)
+- `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `AI_MODEL` — AI provider (OpenAI-compatible)
+- `ACCESS_PASSWORD` — password to enter the app
+- `AUTH_SECRET` — HMAC key for session tokens (regenerate with `openssl rand -hex 32`)
+- `DEV_ORIGIN` — *(optional, dev-only)* allowed dev origin (e.g. an internal IP);
+  read by `next.config.ts` to avoid hard-coding origins into the repo

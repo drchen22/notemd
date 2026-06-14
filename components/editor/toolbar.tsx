@@ -4,6 +4,7 @@ import { memo, useCallback } from 'react'
 import type { Editor } from '@tiptap/react'
 
 import {
+  AlertTriangle,
   Bold,
   Check,
   Code,
@@ -22,7 +23,7 @@ import {
 
 import { ToolbarButton } from './toolbar-button'
 
-type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved'
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 
 interface ToolbarProps {
   editor: Editor | null
@@ -49,6 +50,12 @@ const SaveIndicator = memo(function SaveIndicator({ status }: { status: SaveStat
         <>
           <Check className="size-3 text-muted-foreground/50" strokeWidth={2.5} />
           <span className="text-muted-foreground/50">Saved</span>
+        </>
+      )}
+      {status === 'error' && (
+        <>
+          <AlertTriangle className="size-3 text-destructive" strokeWidth={2} />
+          <span className="text-destructive">Save failed</span>
         </>
       )}
     </div>

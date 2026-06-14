@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-// Auth depends on two env vars and caches the derived token at module level.
-// We set the env before each import and reset the module registry between
-// tests so the cache is always fresh.
+// Auth depends on env vars. We set them before each import and reset the
+// module registry between tests for isolation.
 const TEST_PASSWORD = 'correct-horse-battery-staple'
 const TEST_SECRET = 'a'.repeat(64)
 
@@ -11,39 +10,103 @@ async function importAuth() {
   return import('@/lib/auth')
 }
 
-describe('sessionToken', () => {
+describe('issueSessionToken / verifySessionToken', () => {
   beforeEach(() => {
     process.env.ACCESS_PASSWORD = TEST_PASSWORD
     process.env.AUTH_SECRET = TEST_SECRET
   })
 
-  it('derives a deterministic SHA256 hex token from password + secret', async () => {
-    const { sessionToken } = await importAuth()
-    const token = sessionToken()
-    // SHA256 hex is 64 chars
-    expect(token).toMatch(/^[0-9a-f]{64}$/)
+  it('issues a token with payload.signature format', async () => {
+    const { issueSessionToken } = await importAuth()
+    const token = issueSessionToken()
+    // Format: base64url(payload).base64url(hmac) — exactly one dot separator
+    expect(token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
   })
 
-  it('is stable across calls within the same config (module cache)', async () => {
-    const { sessionToken } = await importAuth()
-    expect(sessionToken()).toBe(sessionToken())
+  it('verifies a freshly-issued token', async () => {
+    const { issueSessionToken, verifySessionToken } = await importAuth()
+    const token = issueSessionToken()
+    expect(verifySessionToken(token)).toBe(true)
   })
 
-  it('changes when the password changes', async () => {
-    const { sessionToken: tokenA } = await importAuth()
-    const a = tokenA()
-
-    process.env.ACCESS_PASSWORD = 'different'
-    const { sessionToken: tokenB } = await importAuth()
-    const b = tokenB()
-
+  it('issues different tokens across time (embedded iat differs)', async () => {
+    const { issueSessionToken } = await importAuth()
+    const a = issueSessionToken()
+    // Force a different second
+    await new Promise((r) => setTimeout(r, 1100))
+    const b = issueSessionToken()
     expect(a).not.toBe(b)
+    // Both should verify (same secret)
+    const { verifySessionToken } = await importAuth()
+    expect(verifySessionToken(a)).toBe(true)
+    expect(verifySessionToken(b)).toBe(true)
   })
 
-  it('throws when env vars are missing', async () => {
+  it('rejects a token signed with a different secret', async () => {
+    const { issueSessionToken } = await importAuth()
+    const token = issueSessionToken()
+    process.env.AUTH_SECRET = 'b'.repeat(64)
+    const { verifySessionToken } = await importAuth()
+    expect(verifySessionToken(token)).toBe(false)
+  })
+
+  it('rejects a token signed with a different password', async () => {
+    const { issueSessionToken } = await importAuth()
+    const token = issueSessionToken()
+    process.env.ACCESS_PASSWORD = 'different'
+    const { verifySessionToken } = await importAuth()
+    expect(verifySessionToken(token)).toBe(false)
+  })
+
+  it('rejects a malformed token (no dot)', async () => {
+    const { verifySessionToken } = await importAuth()
+    expect(verifySessionToken('not-a-valid-token')).toBe(false)
+  })
+
+  it('rejects a token with a tampered payload', async () => {
+    const { issueSessionToken, verifySessionToken } = await importAuth()
+    const token = issueSessionToken()
+    const [payload, sig] = token.split('.')
+    // Flip a character in the payload — HMAC will no longer match
+    const tampered = payload.slice(0, -1) + (payload.endsWith('A') ? 'B' : 'A')
+    expect(verifySessionToken(`${tampered}.${sig}`)).toBe(false)
+  })
+
+  it('rejects a token with a tampered signature', async () => {
+    const { issueSessionToken, verifySessionToken } = await importAuth()
+    const token = issueSessionToken()
+    const [payload] = token.split('.')
+    expect(verifySessionToken(`${payload}.aGaveWRvbmdzaWduYXR1cmU`)).toBe(false)
+  })
+
+  it('rejects an expired token', async () => {
+    const { verifySessionToken, SESSION_MAX_AGE_SEC, issueSessionToken } = await importAuth()
+    // Forge a token issued SESSION_MAX_AGE_SEC + 1 second ago.
+    // Re-sign manually using the same key derivation would need internals,
+    // so instead: mock Date to fast-forward past expiry on a real token.
+    const token = issueSessionToken()
+    const realNow = Date.now
+    Date.now = () => realNow() + (SESSION_MAX_AGE_SEC + 10) * 1000
+    try {
+      expect(verifySessionToken(token)).toBe(false)
+    } finally {
+      Date.now = realNow
+    }
+  })
+
+  it('throws when env vars are missing during issue', async () => {
     delete process.env.ACCESS_PASSWORD
-    const { sessionToken } = await importAuth()
-    expect(() => sessionToken()).toThrow(/ACCESS_PASSWORD and AUTH_SECRET/)
+    const { issueSessionToken } = await importAuth()
+    expect(() => issueSessionToken()).toThrow(/ACCESS_PASSWORD and AUTH_SECRET/)
+  })
+
+  it('verify returns false (not throw) when env missing', async () => {
+    const { issueSessionToken } = await importAuth()
+    const token = issueSessionToken()
+    delete process.env.AUTH_SECRET
+    const { verifySessionToken } = await importAuth()
+    expect(() => verifySessionToken(token)).not.toThrow()
+    expect(verifySessionToken(token)).toBe(false)
   })
 })
 
@@ -104,9 +167,9 @@ describe('isAuthenticated', () => {
     process.env.AUTH_SECRET = TEST_SECRET
   })
 
-  it('returns true when the cookie matches the session token', async () => {
-    const { isAuthenticated, sessionToken, SESSION_COOKIE } = await importAuth()
-    const header = `${SESSION_COOKIE}=${sessionToken()}`
+  it('returns true when the cookie is a valid issued token', async () => {
+    const { isAuthenticated, issueSessionToken, SESSION_COOKIE } = await importAuth()
+    const header = `${SESSION_COOKIE}=${issueSessionToken()}`
     expect(isAuthenticated(header)).toBe(true)
   })
 
@@ -129,9 +192,9 @@ describe('requireAuth', () => {
   })
 
   it('returns null when authenticated', async () => {
-    const { requireAuth, sessionToken, SESSION_COOKIE } = await importAuth()
+    const { requireAuth, issueSessionToken, SESSION_COOKIE } = await importAuth()
     const req = new Request('http://localhost/api/files', {
-      headers: { cookie: `${SESSION_COOKIE}=${sessionToken()}` },
+      headers: { cookie: `${SESSION_COOKIE}=${issueSessionToken()}` },
     })
     expect(requireAuth(req)).toBeNull()
   })

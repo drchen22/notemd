@@ -20,7 +20,8 @@ export async function GET(request: Request) {
       const orphans = await findOrphanAttachments()
       const totalSize = orphans.reduce((sum, o) => sum + o.size, 0)
       return NextResponse.json({ orphans, totalSize })
-    } catch {
+    } catch (err) {
+      console.error('[attachments] scan orphans:', err)
       return NextResponse.json(
         { error: 'Failed to scan for orphaned attachments' },
         { status: 500 },
@@ -32,7 +33,8 @@ export async function GET(request: Request) {
     try {
       const analysis = await analyzeStorage()
       return NextResponse.json(analysis)
-    } catch {
+    } catch (err) {
+      console.error('[attachments] analyze storage:', err)
       return NextResponse.json(
         { error: 'Failed to analyze storage' },
         { status: 500 },
@@ -60,7 +62,8 @@ export async function DELETE(request: Request) {
 
     const result = await deleteOrphanAttachments(paths)
     return NextResponse.json(result)
-  } catch {
+  } catch (err) {
+    console.error('[attachments] delete orphans:', err)
     return NextResponse.json(
       { error: 'Failed to delete orphaned attachments' },
       { status: 500 },

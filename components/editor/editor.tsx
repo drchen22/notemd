@@ -2,10 +2,13 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
+import { toast } from 'sonner'
 
 import { editorExtensions } from '@/lib/editor-extensions'
 import { createInlineAITrigger } from '@/lib/extensions/inline-ai-trigger'
 import { resolveImagePaths, relativizeImagePaths } from '@/lib/image-paths'
+import { useDocument } from '@/lib/context/document-context'
+import { useLayout } from '@/lib/context/layout-context'
 
 import type { NoteFrontmatter } from '@/types/frontmatter'
 
@@ -17,7 +20,7 @@ import { SelectionAIMenu } from './selection-ai-menu'
 import { InlineAIInput } from './inline-ai-input'
 import { FrontmatterMeta } from './frontmatter-meta'
 
-type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved'
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 
 interface InlineAIState {
   isOpen: boolean
@@ -25,22 +28,22 @@ interface InlineAIState {
   coords: { top: number; left: number }
 }
 
-interface NoteEditorProps {
-  markdownContent?: string | null
-  activeFilePath?: string | null
-  frontmatter?: NoteFrontmatter | null
-  onFrontmatterChange?: (fm: NoteFrontmatter) => void
-  onToggleAI?: () => void
-  showAI?: boolean
-  /** Called when a title edit causes the file to be renamed */
-  onActiveFilePathChange?: (newPath: string) => void
-}
-
 const DEBOUNCE_MS = 1500
 const DEFAULT_CONTENT = '<h1>Welcome to NoteMD</h1><p>Start writing, or open a file from the sidebar…</p>'
 const DEFAULT_INLINE_AI_STATE: InlineAIState = { isOpen: false, cursorPos: 0, coords: { top: 0, left: 0 } }
 
-export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFilePath, frontmatter, onFrontmatterChange, onToggleAI, showAI, onActiveFilePathChange }: NoteEditorProps) {
+export const NoteEditor = memo(function NoteEditor() {
+  // Document/layout state from contexts (replaces 7 props)
+  const {
+    activeFilePath: markdownContent_filePath,
+    markdownContent,
+    activeFileFrontmatter: frontmatter,
+    setActiveFileFrontmatter,
+    changeActivePath,
+  } = useDocument()
+  const { showAI, toggleAI } = useLayout()
+  const activeFilePath = markdownContent_filePath
+
   const lastLoadedRef = useRef<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -103,8 +106,13 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
           const fullSrc = dir ? `${dir}/${data.path}` : data.path
           return `/api/content-files?path=${encodeURIComponent(fullSrc)}`
         }
-      } catch {
-        // Upload failed
+        // HTTP error (e.g. invalid file type / too large)
+        const data = await res.json().catch(() => null)
+        console.error('[editor] image upload failed: HTTP', res.status)
+        toast.error('图片上传失败', { description: data?.error })
+      } catch (err) {
+        console.error('[editor] image upload failed:', err)
+        toast.error('图片上传失败')
       }
       return null
     },
@@ -139,10 +147,13 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
             setSaveStatus('idle')
           }, 2000)
         } else {
-          setSaveStatus('unsaved')
+          setSaveStatus('error')
+          toast.error('保存失败', { description: '请检查网络后重试' })
         }
-      } catch {
-        setSaveStatus('unsaved')
+      } catch (err) {
+        console.error('[editor] save failed:', err)
+        setSaveStatus('error')
+        toast.error('保存失败')
       }
     },
     // saveFile only reads refs (activeFilePathRef, frontmatterRef, lastSavedMarkdownRef)
@@ -240,7 +251,7 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
 
   // Frontmatter change handler — triggers auto-save and title rename
   const handleFrontmatterChange = useCallback((newFm: NoteFrontmatter) => {
-    onFrontmatterChange?.(newFm)
+    setActiveFileFrontmatter(newFm)
 
     const ed = editorRef.current
     if (!ed || !activeFilePath) return
@@ -258,8 +269,8 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
       renameTimerRef.current = setTimeout(async () => {
         try {
           // 1. Rename the file first
-          const res = await fetch('/api/files', {
-            method: 'PATCH',
+          const res = await fetch('/api/files/rename', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'rename-from-title', path: activeFilePathRef.current, title: newTitle }),
           })
@@ -268,17 +279,23 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
             // Sync actual title back (may differ if collision suffix was added)
             if (data.actualTitle) {
               lastRenameTitleRef.current = data.actualTitle
-              onFrontmatterChange?.({ ...frontmatterRef.current!, title: data.actualTitle })
+              setActiveFileFrontmatter({ ...frontmatterRef.current!, title: data.actualTitle })
             }
             if (data.newPath && data.newPath !== activeFilePathRef.current) {
-              onActiveFilePathChange?.(data.newPath)
+              // Editor-driven rename → bump the tree so the sidebar re-fetches
+              changeActivePath(data.newPath, { bumpTree: true })
               // Update the ref so saveFile uses the new path
               activeFilePathRef.current = data.newPath
             }
+          } else {
+            const data = await res.json().catch(() => null)
+            toast.error('重命名失败', { description: data?.error })
           }
           // 2. Then save content to the (possibly renamed) path
           saveFileRef.current(ed.getMarkdown())
-        } catch {
+        } catch (err) {
+          console.error('[editor] rename-from-title failed:', err)
+          toast.error('重命名失败')
           // Still try to save even if rename failed
           saveFileRef.current(ed.getMarkdown())
         }
@@ -291,7 +308,7 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
         saveFileRef.current(ed.getMarkdown())
       }, DEBOUNCE_MS)
     }
-  }, [activeFilePath, onFrontmatterChange, onActiveFilePathChange])
+  }, [activeFilePath, setActiveFileFrontmatter, changeActivePath])
 
   // Load external markdown content
   useEffect(() => {
@@ -323,7 +340,7 @@ export const NoteEditor = memo(function NoteEditor({ markdownContent, activeFile
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <Toolbar editor={editor} saveStatus={saveStatus} onToggleAI={onToggleAI} showAI={showAI} />
+      <Toolbar editor={editor} saveStatus={saveStatus} onToggleAI={toggleAI} showAI={showAI} />
       <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto custom-scrollbar">
         <div className="mx-auto max-w-[44rem] px-10 pt-12 pb-[50vh]">
           {frontmatter && activeFilePath && (

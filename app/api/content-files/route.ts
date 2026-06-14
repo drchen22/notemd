@@ -47,7 +47,8 @@ export async function GET(request: Request) {
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })
-  } catch {
+  } catch (err) {
+    console.error('[content-files] read:', err)
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 }
