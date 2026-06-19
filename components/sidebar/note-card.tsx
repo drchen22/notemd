@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { FileText, FolderInput, Trash2, Folder, Check, PenTool } from 'lucide-react'
+import { FileText, FolderInput, Trash2, Folder, Check } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 
 import type { FileTreeNode } from '@/types/file-tree'
@@ -24,7 +24,7 @@ function formatDate(dateStr?: string): string {
 
 /** Strip known extension from filename */
 function stripExt(name: string): string {
-  return name.replace(/\.(md|excalidraw)$/, '')
+  return name.replace(/\.md$/, '')
 }
 
 /** Get parent directory of a file path */
@@ -66,38 +66,28 @@ export const NoteCard = memo(function NoteCard({
     <div
       onClick={() => onSelect(node.path)}
       className={cn(
-        'group relative px-4 py-3.5 cursor-pointer transition-colors duration-150 border-b border-[#e8e6e3] last:border-b-0',
+        'group relative px-4 py-3.5 cursor-pointer transition-colors duration-150 border-b border-[#E5E7EB] last:border-b-0',
         isActive
-          ? 'bg-[#f5f5f4]'
-          : 'hover:bg-[#fafaf9]',
+          ? 'bg-[#EEF4FF]'
+          : 'hover:bg-[#F3F4F6]',
       )}
     >
       {isActive && (
-        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#8a8a8a] rounded-r-full" />
+        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#2563EB] rounded-r-full" />
       )}
 
       <div className="flex items-start gap-3 mb-2">
-        {node.name.endsWith('.excalidraw') ? (
-          <PenTool
-            className={cn(
-              'size-[15px] shrink-0 mt-1',
-              isActive ? 'text-[#4a4a4a]/70' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
-            )}
-            strokeWidth={1.5}
-          />
-        ) : (
-          <FileText
-            className={cn(
-              'size-[15px] shrink-0 mt-1',
-              isActive ? 'text-[#4a4a4a]/70' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
-            )}
-            strokeWidth={1.5}
-          />
-        )}
+        <FileText
+          className={cn(
+            'size-[15px] shrink-0 mt-1',
+            isActive ? 'text-[#2563EB]' : 'text-[#9CA3AF] group-hover:text-[#6B7280]',
+          )}
+          strokeWidth={1.5}
+        />
         <span
           className={cn(
             'text-[0.9375rem] flex-1 font-medium',
-            isActive ? 'text-[#1a1a1a]' : 'text-[#3a3a3a]',
+            isActive ? 'text-[#111827]' : 'text-[#374151]',
           )}
         >
           {title}
@@ -105,15 +95,15 @@ export const NoteCard = memo(function NoteCard({
       </div>
 
       {preview && (
-        <p className="text-[0.8125rem] text-[#6a6a6a] leading-relaxed line-clamp-2 pl-[27px] mb-2">
+        <p className="text-[0.8125rem] text-[#9CA3AF] leading-relaxed line-clamp-2 pl-[27px] mb-2">
           {preview}
         </p>
       )}
 
       {formattedDate && (
         <div className="flex items-center justify-between pl-[27px]">
-          <span className="text-[0.75rem] text-[#8a8a8a]">{formattedDate}</span>
-          <span className="text-[0.75rem] text-[#8a8a8a]">Created {formattedDate}</span>
+          <span className="text-[0.75rem] text-[#9CA3AF]">{formattedDate}</span>
+          <span className="text-[0.75rem] text-[#9CA3AF]">Created {formattedDate}</span>
         </div>
       )}
     </div>
@@ -167,14 +157,14 @@ export const NoteCard = memo(function NoteCard({
                       className={cn(
                         'relative flex items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden transition-colors',
                         isCurrent
-                          ? 'text-[#8a8a8a] cursor-default'
+                          ? 'text-[#9CA3AF] cursor-default'
                           : 'cursor-pointer hover:bg-accent hover:text-accent-foreground',
                       )}
                       style={{ paddingLeft: `${folder.depth * 16 + 8}px` }}
                     >
                       <Folder className="size-3.5 shrink-0" strokeWidth={1.5} />
                       <span className="truncate flex-1">{folder.name}</span>
-                      {isCurrent && <Check className="size-3 shrink-0 text-[#8a8a8a]" strokeWidth={2} />}
+                      {isCurrent && <Check className="size-3 shrink-0 text-[#9CA3AF]" strokeWidth={2} />}
                     </ContextMenuPrimitive.Item>
                   )
                 })}

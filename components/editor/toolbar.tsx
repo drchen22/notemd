@@ -107,7 +107,7 @@ export const Toolbar = memo(function Toolbar({
   if (!editor) return null
 
   return (
-    <div className="flex items-center gap-0.5 border-b border-border/40 px-3 py-1 bg-background/80 backdrop-blur-sm">
+    <div className="flex items-center gap-0.5 border-b border-border/40 px-3 py-2 min-h-[44px] bg-background/80 backdrop-blur-sm">
       {/* Undo / Redo */}
       <ToolbarButton
         icon={Undo2}

@@ -28,13 +28,11 @@ interface ContentsPanelProps {
   /** Operation state */
   renamingPath: string | null
   deletingPath: string | null
-  creatingIn: { parentPath: string; type: 'file' | 'folder' | 'excalidraw' } | null
+  creatingIn: { parentPath: string; type: 'file' | 'folder' } | null
   /** Whether the panel is loading */
   isLoading: boolean
   /** Create a new note in inbox */
   onNewNote: () => void
-  /** Create a new excalidraw whiteboard in inbox */
-  onNewExcalidraw?: () => void
   /** Create a new folder in current directory */
   onNewFolder?: () => void
   /** Whether the left panel is collapsed */
@@ -94,7 +92,6 @@ export function ContentsPanel({
   creatingIn,
   isLoading,
   onNewNote,
-  onNewExcalidraw,
   onNewFolder,
   leftCollapsed,
   onExpandLeft,
@@ -179,7 +176,6 @@ export function ContentsPanel({
       segments={breadcrumbSegments}
       onNavigate={onBreadcrumbClick}
       onNewNote={onNewNote}
-      onNewExcalidraw={onNewExcalidraw}
       onNewFolder={onNewFolder}
       leftCollapsed={leftCollapsed}
       onExpandLeft={onExpandLeft}
@@ -190,7 +186,6 @@ export function ContentsPanel({
       segments={[]}
       onNavigate={() => {}}
       onNewNote={onNewNote}
-      onNewExcalidraw={onNewExcalidraw}
       onNewFolder={onNewFolder}
       leftCollapsed={leftCollapsed}
       onExpandLeft={onExpandLeft}
@@ -202,7 +197,7 @@ export function ContentsPanel({
       <div className="flex flex-col flex-1 min-w-0 bg-white">
         {breadcrumb}
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm text-[#8a8a8a]">Select a category</p>
+          <p className="text-sm text-[#9CA3AF]">Select a category</p>
         </div>
       </div>
     )
@@ -220,7 +215,7 @@ export function ContentsPanel({
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-6 animate-pulse rounded bg-[#f0f0ee]"
+                  className="h-6 animate-pulse rounded bg-[#E5E7EB]"
                   style={{ width: `${70 + i * 8}%` }}
                 />
               ))}
@@ -228,7 +223,7 @@ export function ContentsPanel({
           </div>
         ) : contents && contents.length === 0 && !isCreatingHere ? (
           <div className="flex items-center justify-center h-full py-8">
-            <p className="text-sm text-[#8a8a8a]">
+            <p className="text-sm text-[#9CA3AF]">
               Empty folder
             </p>
           </div>

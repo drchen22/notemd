@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, PanelLeftOpen, Plus, FileText, PenTool, FolderPlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PanelLeftOpen, Plus, FileText, FolderPlus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -14,8 +14,6 @@ interface PanelBreadcrumbProps {
   onNavigate: (index: number) => void
   /** Create a new note in inbox */
   onNewNote: () => void
-  /** Create a new excalidraw whiteboard in inbox */
-  onNewExcalidraw?: () => void
   /** Create a new folder in current directory */
   onNewFolder?: () => void
   /** Whether the left panel is collapsed (show expand button) */
@@ -29,7 +27,6 @@ export function PanelBreadcrumb({
   segments,
   onNavigate,
   onNewNote,
-  onNewExcalidraw,
   onNewFolder,
   leftCollapsed,
   onExpandLeft,
@@ -53,11 +50,11 @@ export function PanelBreadcrumb({
   }, [menuOpen, closeMenu])
 
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#e8e6e3] text-[0.875rem] text-[#4a4a4a]/60 min-h-[44px] bg-white">
+    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#E5E7EB] text-[0.875rem] text-[#6B7280] min-h-[44px] bg-white">
       {leftCollapsed && onExpandLeft && (
         <button
           onClick={onExpandLeft}
-          className="flex items-center justify-center size-6 rounded-md hover:bg-black/[0.04] hover:text-[#1a1a1a] transition-colors shrink-0"
+          className="flex items-center justify-center size-6 rounded-md hover:bg-[#F3F4F6] hover:text-[#111827] transition-colors shrink-0"
           title="Show categories"
         >
           <PanelLeftOpen className="size-4" strokeWidth={1.5} />
@@ -66,7 +63,7 @@ export function PanelBreadcrumb({
       {canGoBack && (
         <button
           onClick={() => onNavigate(segments.length - 2)}
-          className="flex items-center justify-center size-6 rounded-md hover:bg-black/[0.04] hover:text-[#1a1a1a] transition-colors shrink-0"
+          className="flex items-center justify-center size-6 rounded-md hover:bg-[#F3F4F6] hover:text-[#111827] transition-colors shrink-0"
           title="Go back"
         >
           <ChevronLeft className="size-4" strokeWidth={1.5} />
@@ -75,20 +72,20 @@ export function PanelBreadcrumb({
       <button
         onClick={() => onNavigate(-1)}
         className={cn(
-          'truncate rounded-md px-2 py-1 transition-colors hover:bg-black/[0.04] hover:text-[#1a1a1a]',
-          segments.length === 0 && 'text-[#1a1a1a] font-semibold',
+          'truncate rounded-md px-2 py-1 transition-colors hover:bg-[#F3F4F6] hover:text-[#111827]',
+          segments.length === 0 && 'text-[#111827] font-semibold',
         )}
       >
         {categoryName}
       </button>
       {segments.map((seg, i) => (
         <span key={seg.path} className="flex items-center gap-1 shrink-0">
-          <ChevronRight className="size-3 text-[#4a4a4a]/30" strokeWidth={1.5} />
+          <ChevronRight className="size-3 text-[#9CA3AF]" strokeWidth={1.5} />
           <button
             onClick={() => onNavigate(i)}
             className={cn(
-              'truncate rounded-md px-2 py-1 transition-colors hover:bg-black/[0.04] hover:text-[#1a1a1a]',
-              i === segments.length - 1 && 'text-[#1a1a1a] font-semibold',
+              'truncate rounded-md px-2 py-1 transition-colors hover:bg-[#F3F4F6] hover:text-[#111827]',
+              i === segments.length - 1 && 'text-[#111827] font-semibold',
             )}
           >
             {seg.name}
@@ -98,7 +95,7 @@ export function PanelBreadcrumb({
       <div ref={menuRef} className="relative ml-auto shrink-0">
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center justify-center size-6 rounded-md text-[#4a4a4a]/40 hover:bg-black/[0.04] hover:text-[#1a1a1a] transition-colors"
+          className="flex items-center justify-center size-6 rounded-md text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#111827] transition-colors"
           title="New"
         >
           <Plus className="size-4" strokeWidth={1.5} />
@@ -119,15 +116,6 @@ export function PanelBreadcrumb({
               >
                 <FolderPlus className="size-3.5" strokeWidth={1.5} />
                 New Folder
-              </button>
-            )}
-            {onNewExcalidraw && (
-              <button
-                onClick={() => { closeMenu(); onNewExcalidraw() }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
-                <PenTool className="size-3.5" strokeWidth={1.5} />
-                New Whiteboard
               </button>
             )}
           </div>

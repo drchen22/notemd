@@ -26,12 +26,12 @@ type OperationState =
   | { type: 'idle' }
   | { type: 'renaming'; path: string }
   | { type: 'deleting'; path: string }
-  | { type: 'creating'; parentPath: string; itemType: 'file' | 'folder' | 'excalidraw' }
+  | { type: 'creating'; parentPath: string; itemType: 'file' | 'folder' }
 
 type OperationAction =
   | { type: 'startRename'; path: string }
   | { type: 'startDelete'; path: string }
-  | { type: 'startCreate'; parentPath: string; itemType: 'file' | 'folder' | 'excalidraw' }
+  | { type: 'startCreate'; parentPath: string; itemType: 'file' | 'folder' }
   | { type: 'clear' }
 
 const IDLE: OperationState = { type: 'idle' }
@@ -165,7 +165,7 @@ export function TwoPanelSidebar({
   const renamingPath = operation.type === 'renaming' ? operation.path : null
   const deletingPath = operation.type === 'deleting' ? operation.path : null
   const creatingIn = operation.type === 'creating'
-    ? { parentPath: operation.parentPath, type: operation.itemType as 'file' | 'folder' | 'excalidraw' }
+    ? { parentPath: operation.parentPath, type: operation.itemType as 'file' | 'folder' }
     : null
 
   // --- Navigation handlers ---
@@ -251,7 +251,7 @@ export function TwoPanelSidebar({
   )
 
   const handleCreate = useCallback(
-    async (type: 'file' | 'folder' | 'excalidraw', parentPath: string, name: string) => {
+    async (type: 'file' | 'folder', parentPath: string, name: string) => {
       dispatchOperation({ type: 'clear' })
       const fullPath = parentPath ? `${parentPath}/${name}` : name
       try {
@@ -268,8 +268,6 @@ export function TwoPanelSidebar({
           refreshTree()
           if (type === 'file') {
             selectFile(fullPath.endsWith('.md') ? fullPath : fullPath + '.md')
-          } else if (type === 'excalidraw') {
-            selectFile(fullPath.endsWith('.excalidraw') ? fullPath : fullPath + '.excalidraw')
           }
         } else {
           const data = await res.json().catch(() => null)
@@ -316,7 +314,6 @@ export function TwoPanelSidebar({
       onRequestDelete: (path: string) => dispatchOperation({ type: 'startDelete', path }),
       onCreateNote: (parentPath: string) => dispatchOperation({ type: 'startCreate', parentPath, itemType: 'file' }),
       onCreateFolder: (parentPath: string) => dispatchOperation({ type: 'startCreate', parentPath, itemType: 'folder' }),
-      onCreateExcalidraw: (parentPath: string) => dispatchOperation({ type: 'startCreate', parentPath, itemType: 'excalidraw' }),
       onRenameSubmit: handleRenameSubmit,
       onRenameCancel: () => dispatchOperation({ type: 'clear' }),
       onDeleteConfirm: handleDeleteConfirm,
@@ -370,49 +367,8 @@ export function TwoPanelSidebar({
     }
   }, [tree, refreshTree, onSelectedCategoryChange, selectFile])
 
-  // --- New excalidraw: directly create in inbox with auto-generated name ---
-  const handleNewExcalidraw = useCallback(async () => {
-    const baseName = 'untitled'
-    const existingNames = new Set(
-      tree
-        ?.find((n) => n.path === 'inbox')
-        ?.children?.map((c) => c.name) ?? [],
-    )
-    let name = baseName
-    let counter = 1
-    while (existingNames.has(`${name}.excalidraw`)) {
-      counter++
-      name = `${baseName}-${counter}`
-    }
-
-    const fullPath = `inbox/${name}.excalidraw`
-    try {
-      const res = await fetch('/api/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create-file',
-          path: fullPath,
-          content: '',
-        }),
-      })
-      if (res.ok) {
-        refreshTree()
-        onSelectedCategoryChange('inbox')
-        setNavigationStack([])
-        selectFile(fullPath)
-      } else {
-        const data = await res.json().catch(() => null)
-        toast.error('创建白板失败', { description: data?.error })
-      }
-    } catch (err) {
-      console.error('[sidebar] new excalidraw failed:', err)
-      toast.error('创建白板失败')
-    }
-  }, [tree, refreshTree, onSelectedCategoryChange, selectFile])
-
   return (
-    <aside className="relative flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-[#e8e6e3] bg-[#F8F6F3]">
+    <aside className="relative flex h-full w-full shrink-0 flex-col overflow-hidden border-r border-[#E5E7EB] bg-[#F7F8FA]">
       {/* Two-panel area — fills entire height */}
       <div className="flex flex-1 min-h-0">
         {/* Left panel: Categories (collapsible) */}
@@ -454,7 +410,6 @@ export function TwoPanelSidebar({
           creatingIn={creatingIn}
           isLoading={isLoading}
           onNewNote={handleNewNote}
-          onNewExcalidraw={handleNewExcalidraw}
           onNewFolder={() => {
             const currentFolderPath = navigationStack.length > 0
               ? navigationStack[navigationStack.length - 1]
@@ -469,12 +424,12 @@ export function TwoPanelSidebar({
       </div>
 
       {/* Footer: Chat + Settings */}
-      <div className="border-t border-[#e8e6e3] px-3 py-2.5 space-y-0.5">
+      <div className="border-t border-[#E5E7EB] px-3 py-2.5 space-y-0.5">
         <button
           onClick={openFullChat}
           onMouseEnter={onPreloadFullChat}
           onFocus={onPreloadFullChat}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[0.875rem] text-[#4a4a4a]/60 transition-colors hover:bg-black/[0.04] hover:text-[#1a1a1a]"
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[0.875rem] text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#111827]"
         >
           <MessageSquare className="size-[15px] shrink-0" strokeWidth={1.5} />
           <span>新对话</span>
@@ -522,7 +477,7 @@ function PanelDivider({ onResize }: { onResize: (deltaX: number) => void }) {
       onPointerUp={handlePointerUp}
       className="relative shrink-0 w-0 flex items-center justify-center cursor-col-resize group"
     >
-      <div className="absolute inset-y-0 w-px bg-[#e8e6e3] group-hover:bg-[#c8c6c3] transition-all" />
+      <div className="absolute inset-y-0 w-px bg-[#E5E7EB] group-hover:bg-[#D1D5DB] transition-all" />
       <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
     </div>
   )

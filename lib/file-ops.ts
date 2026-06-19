@@ -15,7 +15,7 @@ import { getContentDir } from '@/lib/content-dir'
 import { migrateAttachments } from '@/lib/attachment-mover'
 import { ForbiddenError, NotFoundError, ConflictError, ValidationError } from '@/lib/errors'
 
-const ALLOWED_EXTENSIONS = ['.md', '.excalidraw']
+const ALLOWED_EXTENSIONS = ['.md']
 
 /** Check if a file path has a supported extension */
 function isAllowedFile(filePath: string): boolean {
@@ -33,7 +33,7 @@ function resolveSafePath(filePath: string) {
     throw new ForbiddenError('PATH_TRAVERSAL', 'Forbidden: path traversal detected')
   }
   if (!isAllowedFile(resolved)) {
-    throw new ForbiddenError('INVALID_EXTENSION', 'Forbidden: only .md and .excalidraw files are allowed')
+    throw new ForbiddenError('INVALID_EXTENSION', 'Forbidden: only .md files are allowed')
   }
   return resolved
 }
@@ -159,21 +159,15 @@ export async function getTree(): Promise<FileTreeNode[]> {
   return treeCache
 }
 
-/** Read a file's content.
- *  For .md files, frontmatter is parsed separately.
- *  For .excalidraw files, raw JSON content is returned directly. */
+/** Read a file's content. Frontmatter is parsed separately from the body. */
 export async function readFile(filePath: string): Promise<FileReadResult> {
   const resolved = resolveSafePath(filePath)
   const raw = await fs.readFile(resolved, 'utf-8')
-  if (filePath.endsWith('.excalidraw')) {
-    return { content: raw, frontmatter: {} }
-  }
   return parseFrontmatter(raw)
 }
 
 /** Write content to a file (full replacement).
- *  For .md files, optionally accepts frontmatter to prepend as YAML block.
- *  For .excalidraw files, raw content is written directly. */
+ *  Optionally accepts frontmatter to prepend as a YAML block. */
 export async function writeFile(
   filePath: string,
   content: string,
@@ -185,11 +179,9 @@ export async function writeFile(
   await fs.mkdir(path.dirname(resolved), { recursive: true })
 
   const fullContent =
-    filePath.endsWith('.excalidraw')
-      ? content
-      : frontmatter && !isEmptyFrontmatter(frontmatter)
-        ? stringifyFrontmatter(frontmatter, content)
-        : content
+    frontmatter && !isEmptyFrontmatter(frontmatter)
+      ? stringifyFrontmatter(frontmatter, content)
+      : content
 
   await fs.writeFile(resolved, fullContent, 'utf-8')
   invalidateTreeCache()
@@ -234,12 +226,11 @@ export async function editFile(
   return { replacements: 1 }
 }
 
-/** Create a new file with auto-generated frontmatter (for .md) or empty scene (for .excalidraw) */
+/** Create a new file with auto-generated frontmatter */
 export async function createFile(
   filePath: string,
   content = ''
 ): Promise<void> {
-  const isExcalidraw = filePath.endsWith('.excalidraw')
   // Ensure extension is present
   if (!isAllowedFile(filePath)) {
     filePath += '.md'
@@ -247,14 +238,10 @@ export async function createFile(
   validateName(path.basename(filePath))
   const resolved = resolveSafePath(filePath)
 
-  const fullContent = isExcalidraw
-    ? (content || '{"type":"excalidraw","version":2,"source":"","elements":[],"appState":{"gridSize":null}}')
-    : (() => {
-        const defaultFm = generateDefaultFrontmatter(filePath)
-        return content
-          ? stringifyFrontmatter(defaultFm, content)
-          : stringifyFrontmatter(defaultFm, '')
-      })()
+  const defaultFm = generateDefaultFrontmatter(filePath)
+  const fullContent = content
+    ? stringifyFrontmatter(defaultFm, content)
+    : stringifyFrontmatter(defaultFm, '')
 
   await fs.mkdir(path.dirname(resolved), { recursive: true })
   // Atomic create: 'wx' fails with EEXIST if the file already exists,

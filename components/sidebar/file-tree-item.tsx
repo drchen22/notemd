@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState } from 'react'
-import { FileText, Folder, FolderOpen, FolderInput, ChevronRight, FilePlus2, FolderPlus, Pencil, Trash2, Check, PenTool } from 'lucide-react'
+import { FileText, Folder, FolderOpen, FolderInput, ChevronRight, FilePlus2, FolderPlus, Pencil, Trash2, Check } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 
 import type { FileTreeNode } from '@/types/file-tree'
@@ -24,12 +24,11 @@ export interface FileTreeItemCallbacks {
   onRequestDelete: (path: string) => void
   onCreateNote: (parentPath: string) => void
   onCreateFolder: (parentPath: string) => void
-  onCreateExcalidraw: (parentPath: string) => void
   onRenameSubmit: (path: string, newName: string) => void
   onRenameCancel: () => void
   onDeleteConfirm: (path: string) => void
   onDeleteCancel: () => void
-  onCreateSubmit: (type: 'file' | 'folder' | 'excalidraw', parentPath: string, name: string) => void
+  onCreateSubmit: (type: 'file' | 'folder', parentPath: string, name: string) => void
   onCreateCancel: () => void
   folders: FolderOption[]
   onMoveTo: (sourcePath: string, targetDir: string) => void
@@ -42,7 +41,7 @@ interface FileTreeItemProps extends FileTreeItemCallbacks {
   depth: number
   renamingPath: string | null
   deletingPath: string | null
-  creatingIn: { parentPath: string; type: 'file' | 'folder' | 'excalidraw' } | null
+  creatingIn: { parentPath: string; type: 'file' | 'folder' } | null
   onFolderClick?: (path: string) => void
 }
 
@@ -58,7 +57,6 @@ export const FileTreeItem = memo(function FileTreeItem({
   onRequestDelete,
   onCreateNote,
   onCreateFolder,
-  onCreateExcalidraw,
   onRenameSubmit,
   onRenameCancel,
   onDeleteConfirm,
@@ -79,7 +77,7 @@ export const FileTreeItem = memo(function FileTreeItem({
   const isOpen = isCreatingHere || isOpenUser
 
   const callbacks: FileTreeItemCallbacks = {
-    onRequestRename, onRequestDelete, onCreateNote, onCreateFolder, onCreateExcalidraw,
+    onRequestRename, onRequestDelete, onCreateNote, onCreateFolder,
     onRenameSubmit, onRenameCancel, onDeleteConfirm, onDeleteCancel,
     onCreateSubmit, onCreateCancel, folders, onMoveTo,
   }
@@ -117,14 +115,14 @@ export const FileTreeItem = memo(function FileTreeItem({
                   className={cn(
                     'relative flex items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-hidden transition-colors',
                     isCurrent
-                      ? 'text-[#8a8a8a] cursor-default'
+                      ? 'text-[#9CA3AF] cursor-default'
                       : 'cursor-pointer hover:bg-accent hover:text-accent-foreground',
                   )}
                   style={{ paddingLeft: `${folder.depth * 16 + 8}px` }}
                 >
                   <Folder className="size-3.5 shrink-0" strokeWidth={1.5} />
                   <span className="truncate flex-1">{folder.name}</span>
-                  {isCurrent && <Check className="size-3 shrink-0 text-[#8a8a8a]" strokeWidth={2} />}
+                  {isCurrent && <Check className="size-3 shrink-0 text-[#9CA3AF]" strokeWidth={2} />}
                 </ContextMenuPrimitive.Item>
               )
             })}
@@ -145,22 +143,22 @@ export const FileTreeItem = memo(function FileTreeItem({
           }
         }}
         className={cn(
-          'group flex w-full items-center gap-2 px-3 py-2 text-[0.875rem] text-[#4a4a4a]/60 transition-colors duration-150 hover:text-[#1a1a1a] border-b border-[#e8e6e3]/50 last:border-b-0',
+          'group flex w-full items-center gap-2 px-3 py-2 text-[0.875rem] text-[#6B7280] transition-colors duration-150 hover:text-[#111827] border-b border-[#E5E7EB] last:border-b-0',
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
         {!onFolderClick && (
           <ChevronRight
             className={cn(
-              'size-3.5 shrink-0 text-[#4a4a4a]/30 transition-transform duration-200',
+              'size-3.5 shrink-0 text-[#9CA3AF] transition-transform duration-200',
               isOpen && 'rotate-90',
             )}
           />
         )}
         {isOpen ? (
-          <FolderOpen className="size-4 shrink-0 text-[#5a5a5a]" strokeWidth={1.5} />
+          <FolderOpen className="size-4 shrink-0 text-[#6B7280]" strokeWidth={1.5} />
         ) : (
-          <Folder className="size-4 shrink-0 text-[#6a6a6a]" strokeWidth={1.5} />
+          <Folder className="size-4 shrink-0 text-[#6B7280]" strokeWidth={1.5} />
         )}
         {isRenaming ? (
           <InlineRenameInput
@@ -183,9 +181,6 @@ export const FileTreeItem = memo(function FileTreeItem({
           <ContextMenuContent>
             <ContextMenuItem onClick={() => { onCreateNote(node.path) }}>
               <FilePlus2 className="size-3.5" strokeWidth={1.5} /> New Note
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => { onCreateExcalidraw(node.path) }}>
-              <PenTool className="size-3.5" strokeWidth={1.5} /> New Whiteboard
             </ContextMenuItem>
             <ContextMenuItem onClick={() => { onCreateFolder(node.path) }}>
               <FolderPlus className="size-3.5" strokeWidth={1.5} /> New Folder
@@ -243,31 +238,21 @@ export const FileTreeItem = memo(function FileTreeItem({
     <button
       onClick={() => onFileSelect(node.path)}
       className={cn(
-        'group flex w-full items-center gap-2.5 px-3 py-2 text-[0.875rem] transition-all duration-150 border-b border-[#e8e6e3]/50 last:border-b-0',
+        'group flex w-full items-center gap-2.5 px-3 py-2 text-[0.875rem] transition-all duration-150 border-b border-[#E5E7EB] last:border-b-0',
         isActive
-          ? 'text-[#1a1a1a] font-medium bg-transparent'
-          : 'text-[#4a4a4a]/60 hover:text-[#1a1a1a] hover:bg-transparent',
+          ? 'text-[#111827] font-medium bg-transparent'
+          : 'text-[#6B7280] hover:text-[#111827] hover:bg-transparent',
       )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
     >
-      {node.name.endsWith('.excalidraw') ? (
-        <PenTool
-          className={cn(
-            'size-3.5 shrink-0 transition-colors',
-            isActive ? 'text-[#4a4a4a]' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
-          )}
-          strokeWidth={1.5}
-        />
-      ) : (
-        <FileText
-          className={cn(
-            'size-3.5 shrink-0 transition-colors',
-            isActive ? 'text-[#4a4a4a]' : 'text-[#4a4a4a]/30 group-hover:text-[#4a4a4a]/50',
-          )}
-          strokeWidth={1.5}
-        />
-      )}
-      <span className="truncate">{node.name.replace(/\.(md|excalidraw)$/, '')}</span>
+      <FileText
+        className={cn(
+          'size-3.5 shrink-0 transition-colors',
+          isActive ? 'text-[#2563EB]' : 'text-[#9CA3AF] group-hover:text-[#6B7280]',
+        )}
+        strokeWidth={1.5}
+      />
+      <span className="truncate">{node.name.replace(/\.md$/, '')}</span>
     </button>
   )
 

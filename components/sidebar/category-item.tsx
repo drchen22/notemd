@@ -51,15 +51,27 @@ export const CategoryItem = memo(function CategoryItem({
     [virtualType],
   )
 
-  // Choose icon based on type — darker, more visible
+  // Choose icon based on type — cool neutral, blue when selected
   const icon = virtualType === 'root' ? (
-    <FileText className="size-[18px] shrink-0 text-[#5a5a5a]" strokeWidth={1.5} />
+    <FileText
+      className={cn(
+        'size-[18px] shrink-0',
+        isSelected ? 'text-[#2563EB]' : 'text-[#9CA3AF] group-hover:text-[#6B7280]',
+      )}
+      strokeWidth={1.5}
+    />
   ) : virtualType === 'inbox' ? (
-    <Inbox className="size-[18px] shrink-0 text-[#5a5a5a]" strokeWidth={1.5} />
+    <Inbox
+      className={cn(
+        'size-[18px] shrink-0',
+        isSelected ? 'text-[#2563EB]' : 'text-[#9CA3AF] group-hover:text-[#6B7280]',
+      )}
+      strokeWidth={1.5}
+    />
   ) : isSelected ? (
-    <FolderOpen className="size-[18px] shrink-0 text-[#4a4a4a]" strokeWidth={1.5} />
+    <FolderOpen className="size-[18px] shrink-0 text-[#2563EB]" strokeWidth={1.5} />
   ) : (
-    <Folder className="size-[18px] shrink-0 text-[#6a6a6a]" strokeWidth={1.5} />
+    <Folder className="size-[18px] shrink-0 text-[#9CA3AF] group-hover:text-[#6B7280]" strokeWidth={1.5} />
   )
 
   return (
@@ -68,21 +80,25 @@ export const CategoryItem = memo(function CategoryItem({
         onClick={() => onSelect(node.path)}
         onContextMenu={handleContextMenu}
         className={cn(
-          'flex items-center gap-3 w-full rounded-lg py-2.5 px-3 transition-colors duration-150 mb-0.5',
+          'group flex items-center gap-3 w-full rounded-md py-2 px-3 transition-colors duration-150 mb-0.5',
           isSelected
-            ? 'text-[#1a1a1a] bg-black/[0.06]'
-            : 'text-[#4a4a4a] hover:bg-black/[0.04]',
+            ? 'bg-[#EEF4FF] text-[#2563EB]'
+            : 'text-[#374151] hover:bg-[#F3F4F6]',
         )}
         title={node.name}
       >
         {icon}
-        <span className="text-[0.9375rem] leading-tight truncate flex-1 text-left font-medium">
+        <span
+          className={cn(
+            'text-[0.9375rem] leading-tight truncate flex-1 text-left font-medium',
+          )}
+        >
           {isRenaming ? null : node.name}
         </span>
-        {itemCount > 0 && (
+        {itemCount > 0 && !isRenaming && (
           <span className={cn(
             'text-[0.75rem] font-medium tabular-nums shrink-0',
-            isSelected ? 'text-[#1a1a1a]/70' : 'text-[#4a4a4a]/50'
+            isSelected ? 'text-[#2563EB]/70' : 'text-[#9CA3AF]'
           )}>
             {itemCount}
           </span>

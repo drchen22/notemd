@@ -26,7 +26,7 @@ export const MoveToPicker = memo(function MoveToPicker({
 }: MoveToPickerProps) {
   if (folders.length === 0) {
     return (
-      <div className="px-3 py-4 text-center text-sm text-[#8a8a8a]">
+      <div className="px-3 py-4 text-center text-sm text-[#9CA3AF]">
         No folders
       </div>
     )
@@ -45,14 +45,14 @@ export const MoveToPicker = memo(function MoveToPicker({
             className={cn(
               'flex items-center gap-2.5 w-full rounded-md py-1.5 pr-2 text-[0.8125rem] transition-colors',
               isCurrent
-                ? 'text-[#8a8a8a] cursor-default'
-                : 'text-[#3a3a3a] hover:bg-black/[0.04]',
+                ? 'text-[#9CA3AF] cursor-default'
+                : 'text-[#374151] hover:bg-[#F3F4F6]',
             )}
             style={{ paddingLeft: `${folder.depth * 16 + 8}px` }}
           >
             <Folder className="size-3.5 shrink-0" strokeWidth={1.5} />
             <span className="truncate flex-1 text-left">{folder.name}</span>
-            {isCurrent && <Check className="size-3 shrink-0 text-[#8a8a8a]" strokeWidth={2} />}
+            {isCurrent && <Check className="size-3 shrink-0 text-[#9CA3AF]" strokeWidth={2} />}
           </button>
         )
       })}

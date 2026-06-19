@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid title' }, { status: 400 })
       }
       // Preserve extension
-      const ext = itemPath.endsWith('.excalidraw') ? '.excalidraw' : '.md'
+      const ext = '.md'
       const baseName = slug + ext
       // No-op if name unchanged
       const currentBasename = itemPath.split('/').pop() ?? itemPath

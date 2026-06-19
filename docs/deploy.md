@@ -10,7 +10,7 @@ NoteMD 的笔记数据**直接读写服务器本地文件系统**（由 `CONTENT
 
 | 特性 | 含义 |
 |------|------|
-| 文件系统存储 | 笔记（`.md` / `.excalidraw`）和上传的图片都落在磁盘 `CONTENT_DIR` |
+| 文件系统存储 | 笔记（`.md`）和上传的图片都落在磁盘 `CONTENT_DIR` |
 | 单用户模型 | 编辑器是单用户设计，无协作功能，不需要多实例共享状态 |
 | 无数据库 | 不依赖 Postgres / MySQL / Redis，省去数据库运维 |
 | Node.js 长驻进程 | 使用 `next start` 运行，需要 Node.js 运行时 |
@@ -171,7 +171,6 @@ CONTENT_DIR/
 ├── 子目录/
 │   ├── 笔记2.md
 │   └── assets/          # 上传的图片存放于此
-└── 白板.excalidraw
 ```
 
 定时备份（cron 示例）：

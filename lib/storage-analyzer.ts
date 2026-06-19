@@ -13,7 +13,6 @@ export interface CategoryStats {
 
 export interface FolderBreakdown {
   markdown: number
-  excalidraw: number
   images: number
 }
 
@@ -29,7 +28,6 @@ export interface StorageAnalysis {
   totalSize: number
   categories: {
     markdown: CategoryStats
-    excalidraw: CategoryStats
     images: CategoryStats
   }
   folders: FolderStats[]
@@ -37,14 +35,13 @@ export interface StorageAnalysis {
 
 /**
  * Scan the content directory and return space usage broken down by
- * category (markdown / excalidraw / images) and by top-level folder.
+ * category (markdown / images) and by top-level folder.
  */
 export async function analyzeStorage(): Promise<StorageAnalysis> {
   const contentDir = getContentDir()
 
   const categories = {
     markdown: { count: 0, size: 0 } as CategoryStats,
-    excalidraw: { count: 0, size: 0 } as CategoryStats,
     images: { count: 0, size: 0 } as CategoryStats,
   }
 
@@ -56,7 +53,7 @@ export async function analyzeStorage(): Promise<StorageAnalysis> {
     absPath: string
     relPath: string
     topFolder: string
-    category: 'markdown' | 'excalidraw' | 'images'
+    category: 'markdown' | 'images'
   }> = []
 
   async function walk(dir: string, relDir: string) {
@@ -77,12 +74,10 @@ export async function analyzeStorage(): Promise<StorageAnalysis> {
         await walk(fullPath, relPath)
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase()
-        let category: 'markdown' | 'excalidraw' | 'images' | null = null
+        let category: 'markdown' | 'images' | null = null
 
         if (ext === '.md') {
           category = 'markdown'
-        } else if (ext === '.excalidraw') {
-          category = 'excalidraw'
         } else if (IMAGE_EXTENSIONS.has(ext) && relPath.includes('/assets/')) {
           category = 'images'
         }
@@ -124,7 +119,7 @@ export async function analyzeStorage(): Promise<StorageAnalysis> {
         path: topFolder === '/' ? '' : topFolder,
         size: 0,
         fileCount: 0,
-        breakdown: { markdown: 0, excalidraw: 0, images: 0 },
+        breakdown: { markdown: 0, images: 0 },
       })
     }
 

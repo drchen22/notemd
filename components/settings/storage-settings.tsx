@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
-import { HardDrive, Settings, Trash2, AlertTriangle, Check, FileText, PenTool, Image } from 'lucide-react'
+import { HardDrive, Settings, Trash2, AlertTriangle, Check, FileText, Image } from 'lucide-react'
 
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,6 @@ interface StorageAnalysis {
   totalSize: number
   categories: {
     markdown: { count: number; size: number }
-    excalidraw: { count: number; size: number }
     images: { count: number; size: number }
   }
   folders: Array<{
@@ -29,7 +28,7 @@ interface StorageAnalysis {
     path: string
     size: number
     fileCount: number
-    breakdown: { markdown: number; excalidraw: number; images: number }
+    breakdown: { markdown: number; images: number }
   }>
 }
 
@@ -98,13 +97,6 @@ const CATEGORY_META = [
     icon: FileText,
     color: 'bg-blue-500',
     trackColor: 'bg-blue-100',
-  },
-  {
-    key: 'excalidraw' as const,
-    label: '白板',
-    icon: PenTool,
-    color: 'bg-purple-500',
-    trackColor: 'bg-purple-100',
   },
   {
     key: 'images' as const,

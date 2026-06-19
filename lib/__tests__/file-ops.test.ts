@@ -60,15 +60,14 @@ describe('getTree', () => {
     expect(tree.map((n) => n.name)).toEqual(['visible.md'])
   })
 
-  it('only includes .md and .excalidraw files', async () => {
+  it('only includes .md files', async () => {
     await fs.writeFile(path.join(tmpDir, 'note.md'), '# N')
-    await fs.writeFile(path.join(tmpDir, 'board.excalidraw'), '{}')
     await fs.writeFile(path.join(tmpDir, 'readme.txt'), 'ignore me')
 
     const { getTree } = await importFileOps()
     const tree = await getTree()
 
-    expect(tree.map((n) => n.name).sort()).toEqual(['board.excalidraw', 'note.md'])
+    expect(tree.map((n) => n.name).sort()).toEqual(['note.md'])
   })
 
   it('parses frontmatter and builds a preview for .md files', async () => {
@@ -99,15 +98,6 @@ describe('readFile', () => {
     expect(content.trim()).toBe('# Body')
   })
 
-  it('returns raw content for .excalidraw files', async () => {
-    const raw = '{"type":"excalidraw","elements":[]}'
-    await fs.writeFile(path.join(tmpDir, 'b.excalidraw'), raw)
-    const { readFile } = await importFileOps()
-    const { content, frontmatter } = await readFile('b.excalidraw')
-    expect(content).toBe(raw)
-    expect(frontmatter).toEqual({})
-  })
-
   it('throws on path traversal (..)', async () => {
     const { readFile } = await importFileOps()
     await expect(readFile('../../etc/passwd')).rejects.toThrow(/Forbidden/)
@@ -127,14 +117,6 @@ describe('writeFile', () => {
     const { content, frontmatter } = await readFile('note.md')
     expect(content.trim()).toBe('body')
     expect(frontmatter.title).toBe('T')
-  })
-
-  it('writes raw content for .excalidraw files', async () => {
-    const { writeFile, readFile } = await importFileOps()
-    const raw = '{"type":"excalidraw"}'
-    await writeFile('b.excalidraw', raw)
-    const { content } = await readFile('b.excalidraw')
-    expect(content).toBe(raw)
   })
 
   it('creates parent directories as needed', async () => {
@@ -172,13 +154,6 @@ describe('createFile', () => {
     await createFile('notes/world')
     const { frontmatter } = await readFile('notes/world.md')
     expect(frontmatter.title).toBe('World')
-  })
-
-  it('creates an empty scene for .excalidraw files', async () => {
-    const { createFile, readFile } = await importFileOps()
-    await createFile('board.excalidraw')
-    const { content } = await readFile('board.excalidraw')
-    expect(JSON.parse(content).type).toBe('excalidraw')
   })
 
   it('fails when the file already exists (atomic)', async () => {
@@ -263,13 +238,13 @@ describe('renameItem', () => {
     expect(content.trim()).toBe('body') // body preserved
   })
 
-  it('preserves extension when new name omits it', async () => {
+  it('preserves .md extension when new name omits it', async () => {
     const { createFile, renameItem, readFile } = await importFileOps()
-    await createFile('b.excalidraw')
-    const newPath = await renameItem('b.excalidraw', 'c')
-    expect(newPath).toBe('c.excalidraw')
-    const { content } = await readFile('c.excalidraw')
-    expect(JSON.parse(content).type).toBe('excalidraw')
+    await createFile('b.md', '')
+    const newPath = await renameItem('b.md', 'c')
+    expect(newPath).toBe('c.md')
+    const { frontmatter } = await readFile('c.md')
+    expect(frontmatter.title).toBe('C')
   })
 
   it('fails when the target name already exists', async () => {

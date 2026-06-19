@@ -79,7 +79,7 @@ export function AIPanel() {
       style={{ width: width ?? 320 }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5">
+      <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5 min-h-[44px]">
         <span className="text-[0.8125rem] font-medium text-foreground/70">AI</span>
         {currentFilePath && (
           <span className="truncate text-xs text-muted-foreground/50">

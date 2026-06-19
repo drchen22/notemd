@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 
 import { getContentDir } from '@/lib/content-dir'
-import { extractMdImageRefs, extractExcalidrawRefs } from '@/lib/attachment-refs'
+import { extractMdImageRefs } from '@/lib/attachment-refs'
 
 /** An attachment file that is not referenced by any document */
 export interface OrphanAttachment {
@@ -75,8 +75,8 @@ async function collectAllAttachments(contentDir: string): Promise<Map<string, Se
 }
 
 /**
- * Recursively find all .md and .excalidraw files and collect the attachment
- * refs they contain.  Returns a map: relative-assets-dir → Set<filename>
+ * Recursively find all .md files and collect the attachment refs they contain.
+ * Returns a map: relative-assets-dir → Set<filename>
  */
 async function collectReferencedAttachments(contentDir: string): Promise<Map<string, Set<string>>> {
   const result = new Map<string, Set<string>>()
@@ -100,14 +100,12 @@ async function collectReferencedAttachments(contentDir: string): Promise<Map<str
         await walk(fullPath, relPath)
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase()
-        if (ext !== '.md' && ext !== '.excalidraw') continue
+        if (ext !== '.md') continue
 
         let refs: string[] = []
         try {
           const content = await fs.readFile(fullPath, 'utf-8')
-          refs = ext === '.excalidraw'
-            ? extractExcalidrawRefs(content)
-            : extractMdImageRefs(content)
+          refs = extractMdImageRefs(content)
         } catch {
           continue
         }
@@ -135,7 +133,7 @@ async function collectReferencedAttachments(contentDir: string): Promise<Map<str
 
 /**
  * Scan the content directory for orphaned attachments — image files in
- * `assets/` directories that are not referenced by any .md or .excalidraw file.
+ * `assets/` directories that are not referenced by any .md file.
  */
 export async function findOrphanAttachments(): Promise<OrphanAttachment[]> {
   const contentDir = getContentDir()

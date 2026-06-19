@@ -22,9 +22,8 @@ export function InlineRenameInput({
   const inputRef = useRef<HTMLInputElement>(null)
   // Strip known extension for editing (will be re-added on submit if it's a file)
   const isMd = initialName.endsWith('.md')
-  const isExcalidraw = initialName.endsWith('.excalidraw')
-  const isFile = isMd || isExcalidraw
-  const ext = isMd ? '.md' : isExcalidraw ? '.excalidraw' : ''
+  const isFile = isMd
+  const ext = isMd ? '.md' : ''
   const bareName = isFile ? initialName.slice(0, -ext.length) : initialName
 
   useEffect(() => {

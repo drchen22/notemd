@@ -14,7 +14,6 @@
         "@ai-sdk/openai": "^3.0.68",
         "@ai-sdk/react": "^3.0.199",
         "@base-ui/react": "^1.5.0",
-        "@excalidraw/excalidraw": "^0.18.1",
         "@tiptap/core": "^3.26.0",
         "@tiptap/extension-code-block-lowlight": "^3.26.0",
         "@tiptap/extension-image": "^3.26.0",
