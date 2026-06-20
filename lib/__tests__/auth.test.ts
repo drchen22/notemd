@@ -209,3 +209,56 @@ describe('requireAuth', () => {
     expect(body.error).toBe('Unauthorized')
   })
 })
+
+describe('isSecureRequest', () => {
+  beforeEach(() => {
+    process.env.ACCESS_PASSWORD = TEST_PASSWORD
+    process.env.AUTH_SECRET = TEST_SECRET
+  })
+
+  // Determines the session cookie's Secure flag. A bare `next start` over HTTP
+  // cannot store a Secure cookie, so the flag must follow the real protocol.
+
+  it('returns false for a direct HTTP request', async () => {
+    const { isSecureRequest } = await importAuth()
+    const req = new Request('http://localhost/api/auth')
+    expect(isSecureRequest(req)).toBe(false)
+  })
+
+  it('returns true for a direct HTTPS request', async () => {
+    const { isSecureRequest } = await importAuth()
+    const req = new Request('https://localhost/api/auth')
+    expect(isSecureRequest(req)).toBe(true)
+  })
+
+  it('returns true behind a TLS-terminating proxy (x-forwarded-proto: https)', async () => {
+    const { isSecureRequest } = await importAuth()
+    // Proxies terminate TLS then forward over plain HTTP.
+    const req = new Request('http://localhost/api/auth', {
+      headers: { 'x-forwarded-proto': 'https' },
+    })
+    expect(isSecureRequest(req)).toBe(true)
+  })
+
+  it('takes the first token of a comma-separated x-forwarded-proto', async () => {
+    const { isSecureRequest } = await importAuth()
+    const req = new Request('http://localhost/api/auth', {
+      headers: { 'x-forwarded-proto': 'https, http' },
+    })
+    expect(isSecureRequest(req)).toBe(true)
+  })
+
+  it('returns false when x-forwarded-proto is http', async () => {
+    const { isSecureRequest } = await importAuth()
+    const req = new Request('https://localhost/api/auth', {
+      headers: { 'x-forwarded-proto': 'http' },
+    })
+    expect(isSecureRequest(req)).toBe(false)
+  })
+
+  it('falls back to the URL scheme when x-forwarded-proto is absent', async () => {
+    const { isSecureRequest } = await importAuth()
+    const req = new Request('https://localhost/api/auth')
+    expect(isSecureRequest(req)).toBe(true)
+  })
+})

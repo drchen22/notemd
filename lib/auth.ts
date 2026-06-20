@@ -142,3 +142,30 @@ export function requireAuth(request: Request): NextResponse | null {
     ? null
     : NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 }
+
+/**
+ * Whether a request arrived over a secure (HTTPS) context.
+ *
+ * Used to decide the session cookie's `Secure` flag. The flag must NOT be
+ * hard-coded from NODE_ENV: a production instance served over plain HTTP
+ * (e.g. bare `next start` with no TLS-terminating proxy) cannot store a
+ * `Secure` cookie, so the browser silently drops it and the user can never
+ * get past login. Deriving it from the actual request protocol keeps it
+ * correct in both cases.
+ *
+ * Detection order:
+ *   1. `X-Forwarded-Proto` — authoritative when behind a TLS-terminating
+ *      proxy (the future NAS / tunnel deployment). Takes the first token.
+ *   2. The request URL scheme — for direct (no-proxy) connections.
+ */
+export function isSecureRequest(
+  request: Pick<Request, 'url' | 'headers'>,
+): boolean {
+  const forwarded = request.headers.get('x-forwarded-proto')
+  if (forwarded) {
+    const first = forwarded.split(',')[0].trim().toLowerCase()
+    if (first === 'https') return true
+    if (first === 'http') return false
+  }
+  return new URL(request.url).protocol === 'https:'
+}
