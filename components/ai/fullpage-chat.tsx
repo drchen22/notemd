@@ -4,7 +4,7 @@ import { useRef, useEffect, useState, useCallback, type FormEvent } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { ArrowLeft, MessageCircle } from 'lucide-react'
 
-import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
+import type { PanelAgentUIMessage } from '@/lib/agents/panel-agent'
 import { ChatInput } from './chat-input'
 import { ChatMessages } from './chat-messages'
 import { EmptyState } from './empty-state'
@@ -17,7 +17,7 @@ export function FullPageChat({ onClose }: FullPageChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
 
-  const { messages, sendMessage, status, stop, error } = useChat<NoteAgentUIMessage>({
+  const { messages, sendMessage, status, stop, error } = useChat<PanelAgentUIMessage>({
     id: 'fullpage-chat',
     onError: (err) => console.error('Fullpage chat error:', err),
   })

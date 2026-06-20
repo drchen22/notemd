@@ -1,28 +1,31 @@
 import { createAgentUIStreamResponse } from 'ai'
 
-import { noteAgent } from '@/lib/agents/note-agent'
+import { panelAgent } from '@/lib/agents/panel-agent'
 import { requireAuth } from '@/lib/auth'
 
+/**
+ * Chat panel / full-page chat route.
+ * Runs the tool-loop {@link panelAgent}. Selection/inline transforms are
+ * served by `/api/transform` instead.
+ */
 export async function POST(req: Request) {
   const denied = requireAuth(req)
   if (denied) return denied
   try {
     const body = await req.json()
-    const { messages, currentFilePath, currentFileContent, mode } = body as {
+    const { messages, currentFilePath, currentFileContent } = body as {
       messages: unknown[]
       currentFilePath?: string | null
       currentFileContent?: string | null
-      mode?: 'panel' | 'selection' | 'inline' | 'fullpage' | null
     }
 
     return await createAgentUIStreamResponse({
-      agent: noteAgent,
+      agent: panelAgent,
       uiMessages: messages,
       abortSignal: req.signal,
       options: {
         currentFilePath,
         currentFileContent,
-        mode,
       },
     })
   } catch (err) {

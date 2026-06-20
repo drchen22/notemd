@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport, type UIMessage } from 'ai'
 import { Send, Square, Check, MessageSquarePlus, X } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 
-import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
 import { SafeMarkdown } from '@/components/ai/message-bubble'
 
 /* ── Types ── */
@@ -42,15 +42,16 @@ export function InlineAIInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [phase, setPhase] = useState<'input' | 'responding' | 'result'>('input')
 
-  const { messages, sendMessage, status, stop, setMessages } = useChat<NoteAgentUIMessage>({
+  const { messages, sendMessage, status, stop, setMessages } = useChat<UIMessage>({
     id: 'inline-ai',
+    transport: new DefaultChatTransport({ api: '/api/transform', body: { mode: 'inline' } }),
     onError: (err) => console.error('Inline AI error:', err),
   })
 
   const isLoading = status === 'streaming'
 
   /** Get text content for a specific message */
-  function getMsgText(msg: NoteAgentUIMessage): string {
+  function getMsgText(msg: UIMessage): string {
     return msg.parts
       .filter((p) => p.type === 'text')
       .map((p) => (p as { type: 'text'; text: string }).text)
@@ -90,7 +91,6 @@ export function InlineAIInput({
       {
         body: {
           currentFilePath: activeFilePath,
-          mode: 'inline',
         },
       },
     )

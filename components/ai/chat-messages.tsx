@@ -3,11 +3,11 @@
 import { type ReactNode } from 'react'
 import { Loader2, AlertCircle } from 'lucide-react'
 
-import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
+import type { PanelAgentUIMessage } from '@/lib/agents/panel-agent'
 import { MessageBubble } from './message-bubble'
 
 interface ChatMessagesProps {
-  messages: NoteAgentUIMessage[]
+  messages: PanelAgentUIMessage[]
   isLoading: boolean
   error: Error | null | undefined
   emptyContent?: ReactNode

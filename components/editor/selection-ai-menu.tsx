@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport, type UIMessage } from 'ai'
 import {
   PenLine,
   ListTree,
@@ -17,7 +18,6 @@ import {
 } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 
-import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
 import { SafeMarkdown } from '@/components/ai/message-bubble'
 
 /* ── Action definitions ── */
@@ -51,8 +51,9 @@ export function SelectionAIMenu({ editor, activeFilePath }: SelectionAIMenuProps
   const [phase, setPhase] = useState<Phase>('idle')
   const savedSelectionRef = useRef<{ from: number; to: number; text: string } | null>(null)
 
-  const { messages, sendMessage, status, stop, setMessages } = useChat<NoteAgentUIMessage>({
+  const { messages, sendMessage, status, stop, setMessages } = useChat<UIMessage>({
     id: 'selection-ai',
+    transport: new DefaultChatTransport({ api: '/api/transform', body: { mode: 'selection' } }),
     onError: (err) => console.error('Selection AI error:', err),
   })
 
@@ -83,7 +84,6 @@ export function SelectionAIMenu({ editor, activeFilePath }: SelectionAIMenuProps
         {
           body: {
             currentFilePath: activeFilePath,
-            mode: 'selection',
           },
         },
       )

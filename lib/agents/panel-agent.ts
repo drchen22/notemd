@@ -1,44 +1,19 @@
 import { ToolLoopAgent, stepCountIs } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 
-import { withReasoning } from '@/lib/ai/with-reasoning'
+import { getModel } from '@/lib/ai/model'
 import { listFilesTool } from '@/lib/tools/list-files'
 import { readFileTool } from '@/lib/tools/read-file'
 import { writeFileTool } from '@/lib/tools/write-file'
 import { editFileTool } from '@/lib/tools/edit-file'
 
 /**
- * Custom fetch that injects `chat_template_kwargs: { enable_thinking: true }`
- * into the request body for the agnes API (LiteLLM).
+ * General-purpose note agent for the chat panel and full-page chat.
  *
- * The @ai-sdk/openai provider strips unknown fields from providerOptions,
- * so we inject it directly into the HTTP request body instead.
+ * Has a tool loop (read/write/edit/list files) and injects the currently
+ * open file as context. Single-turn text transforms (selection/inline) do
+ * NOT use this agent — see `lib/ai/transform.ts` for the tool-less path.
  */
-function withThinking(fetchFn: typeof globalThis.fetch): typeof globalThis.fetch {
-  return async (url, init) => {
-    if (init?.body && typeof init.body === 'string') {
-      try {
-        const body = JSON.parse(init.body)
-        if (body.model && !body.chat_template_kwargs) {
-          body.chat_template_kwargs = { enable_thinking: true }
-          init = { ...init, body: JSON.stringify(body) }
-        }
-      } catch {
-        // not JSON, pass through
-      }
-    }
-    return fetchFn(url, init)
-  }
-}
-
-const openai = createOpenAI({
-  baseURL: process.env.OPENAI_BASE_URL,
-  apiKey: process.env.OPENAI_API_KEY ?? 'dummy',
-  fetch: withThinking(globalThis.fetch),
-})
-
-const baseModel = openai.chat(process.env.AI_MODEL ?? 'gpt-4o-mini')
 
 const BASE_INSTRUCTIONS = `You are NoteMD AI, a writing assistant embedded in a markdown note editor.
 
@@ -57,19 +32,13 @@ Be concise and helpful. Respond in the same language the user writes in.`
 
 const MAX_FILE_CONTENT_LENGTH = 50_000
 
-const MODE_INSTRUCTIONS: Record<string, string> = {
-  selection: `\n\nIMPORTANT: The user selected text and chose an action. Return ONLY the transformed text. Do NOT include any explanation, preamble, or markdown formatting around the result. Just the raw result text.`,
-  inline: `\n\nIMPORTANT: The user typed a quick prompt from their editor. Respond concisely. If generating content, return only the content itself without any preamble or explanation.`,
-}
-
 const callOptionsSchema = z.object({
   currentFilePath: z.string().optional().nullable(),
   currentFileContent: z.string().optional().nullable(),
-  mode: z.enum(['panel', 'selection', 'inline', 'fullpage']).optional().nullable(),
 })
 
-export const noteAgent = new ToolLoopAgent({
-  model: withReasoning(baseModel),
+export const panelAgent = new ToolLoopAgent({
+  model: getModel(),
   instructions: BASE_INSTRUCTIONS,
   tools: {
     listFiles: listFilesTool,
@@ -93,14 +62,8 @@ export const noteAgent = new ToolLoopAgent({
       updatedInstructions += `\n\nThe user currently has this file open:\n---\nFile: ${options.currentFilePath}\nContent:\n${truncated}\n---`
     }
 
-    // Mode-specific instruction suffix
-    const mode = options?.mode as string | undefined
-    if (mode && MODE_INSTRUCTIONS[mode]) {
-      updatedInstructions += MODE_INSTRUCTIONS[mode]
-    }
-
     return { ...args, instructions: updatedInstructions }
   },
 })
 
-export type NoteAgentUIMessage = import('ai').InferAgentUIMessage<typeof noteAgent>
+export type PanelAgentUIMessage = import('ai').InferAgentUIMessage<typeof panelAgent>

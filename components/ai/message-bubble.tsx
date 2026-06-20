@@ -4,7 +4,7 @@ import { useMemo, memo, type ReactNode } from 'react'
 import { FileText, FolderOpen, PenLine, Loader2, FileEdit, Brain, ChevronDown } from 'lucide-react'
 import { useState, useCallback } from 'react'
 
-import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
+import type { PanelAgentUIMessage } from '@/lib/agents/panel-agent'
 
 /* ── Tool metadata (hoisted) ── */
 
@@ -22,7 +22,7 @@ const INLINE_FORMAT_RE = /(\*\*(.+?)\*\*|`(.+?)`)/g
 
 /* ── Message Bubble ── */
 
-export const MessageBubble = memo(function MessageBubble({ msg }: { msg: NoteAgentUIMessage }) {
+export const MessageBubble = memo(function MessageBubble({ msg }: { msg: PanelAgentUIMessage }) {
   const isUser = msg.role === 'user'
 
   return (

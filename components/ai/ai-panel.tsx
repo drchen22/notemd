@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useCallback, type FormEvent } from 'react'
 import { useChat } from '@ai-sdk/react'
 
-import type { NoteAgentUIMessage } from '@/lib/agents/note-agent'
+import type { PanelAgentUIMessage } from '@/lib/agents/panel-agent'
 import { useDocument } from '@/lib/context/document-context'
 import { useLayout } from '@/lib/context/layout-context'
 import { ChatInput } from './chat-input'
@@ -17,7 +17,7 @@ export function AIPanel() {
   const [input, setInput] = useState('')
   const notifiedToolCalls = useRef(new Set<string>())
 
-  const { messages, sendMessage, status, stop, error } = useChat<NoteAgentUIMessage>({
+  const { messages, sendMessage, status, stop, error } = useChat<PanelAgentUIMessage>({
     onError: (err) => {
       console.error('Chat error:', err)
     },
